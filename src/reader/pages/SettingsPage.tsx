@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   User,
-  Moon,
   Globe,
   Bell,
   Shield,
@@ -13,8 +12,11 @@ import {
   BookOpen,
   Trash2,
   Info,
+  Sparkles,
+  Palette,
 } from "lucide-react";
 
+/* ───── Toggle ───── */
 function Toggle({
   enabled,
   onToggle,
@@ -28,25 +30,60 @@ function Toggle({
       role="switch"
       aria-checked={enabled}
       onClick={onToggle}
-      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ${
-        enabled ? "bg-primary" : "bg-muted"
+      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-all duration-300 ${
+        enabled
+          ? "bg-primary shadow-[0_0_12px_hsl(153_60%_53%/0.35)]"
+          : "bg-muted"
       }`}
     >
       <span
-        className="pointer-events-none inline-block rounded-full bg-white shadow-sm transition-transform duration-200"
+        className="pointer-events-none inline-block rounded-full bg-white shadow-md transition-all duration-300"
         style={{
-          height: 18,
-          width: 18,
-          transform: enabled ? "translateX(22px)" : "translateX(4px)",
+          height: 20,
+          width: 20,
+          transform: enabled ? "translateX(26px)" : "translateX(4px)",
         }}
       />
     </button>
   );
 }
 
+/* ───── Segmented Control ───── */
+function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { label: string; value: T }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex items-center gap-0.5 rounded-lg bg-background p-1">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={`rounded-md px-3.5 py-1.5 text-xs font-semibold transition-all duration-200 ${
+            value === opt.value
+              ? "bg-primary text-primary-foreground shadow-sm shadow-primary/25"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ───── Setting Item ───── */
 interface SettingItemProps {
   icon: React.ReactNode;
+  iconBg?: string;
   label: string;
+  subtitle?: string;
   value?: React.ReactNode;
   onClick?: () => void;
   showChevron?: boolean;
@@ -56,7 +93,9 @@ interface SettingItemProps {
 
 function SettingItem({
   icon,
+  iconBg = "bg-primary/10 text-primary",
   label,
+  subtitle,
   value,
   onClick,
   showChevron,
@@ -67,40 +106,51 @@ function SettingItem({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-muted/50 active:bg-muted/70 ${
-        !last ? "border-b border-border" : ""
+      className={`flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors duration-150 hover:bg-white/[0.03] active:bg-white/[0.05] ${
+        !last ? "border-b border-white/[0.04]" : ""
       }`}
     >
       <span
-        className={destructive ? "text-destructive" : "text-muted-foreground"}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+          destructive ? "bg-destructive/10 text-destructive" : iconBg
+        }`}
       >
         {icon}
       </span>
-      <span
-        className={`flex-1 text-sm font-medium ${
-          destructive ? "text-destructive" : "text-foreground"
-        }`}
-      >
-        {label}
-      </span>
+      <div className="min-w-0 flex-1">
+        <span
+          className={`block text-sm font-medium ${
+            destructive ? "text-destructive" : "text-foreground"
+          }`}
+        >
+          {label}
+        </span>
+        {subtitle && (
+          <span className="block text-[11px] text-muted-foreground">
+            {subtitle}
+          </span>
+        )}
+      </div>
       {value && (
-        <span className="text-sm text-muted-foreground">{value}</span>
+        <span className="shrink-0 text-sm text-muted-foreground">{value}</span>
       )}
       {showChevron && (
-        <ChevronRight size={16} className="text-muted-foreground" />
+        <ChevronRight size={16} className="shrink-0 text-muted-foreground/50" />
       )}
     </button>
   );
 }
 
+/* ───── Section Title ───── */
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="mb-2 mt-6 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    <h3 className="mb-1.5 mt-7 px-1 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">
       {children}
     </h3>
   );
 }
 
+/* ═══════ Main ═══════ */
 export default function SettingsPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [readingDirection, setReadingDirection] = useState<"rtl" | "ltr">(
@@ -113,25 +163,26 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState(true);
 
   return (
-    <div className="min-h-screen bg-background pb-24">
+    <div className="min-h-screen bg-background pb-28">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/90 px-4 py-3 backdrop-blur-lg">
+      <header className="sticky top-0 z-40 flex items-center gap-2.5 bg-background/90 px-4 py-3 backdrop-blur-lg">
+        <Sparkles size={20} className="text-primary" />
         <h1 className="text-xl font-bold tracking-tight text-foreground">
           Sozlamalar
         </h1>
       </header>
 
-      <div className="px-4">
-        {/* Profile Section */}
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          {!isLoggedIn ? (
+      <div className="space-y-1 px-4">
+        {/* ── Profile Section ── */}
+        {!isLoggedIn ? (
+          <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-primary/[0.08] via-card to-card">
             <div className="p-5">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                  <User size={24} className="text-muted-foreground" />
+              <div className="mb-4 flex items-center gap-3.5">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15">
+                  <User size={26} className="text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-base font-semibold text-foreground">
                     Kirish
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -142,7 +193,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setIsLoggedIn(true)}
-                className="flex w-full items-center justify-center gap-3 rounded-xl border border-border bg-white px-4 py-3 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50/10"
+                className="flex w-full items-center justify-center gap-3 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-gray-800 shadow-lg shadow-white/5 transition-all duration-200 hover:shadow-xl hover:shadow-white/10 active:scale-[0.98]"
               >
                 <svg className="h-5 w-5" viewBox="0 0 24 24">
                   <path
@@ -165,13 +216,15 @@ export default function SettingsPage() {
                 Google bilan kirish
               </button>
             </div>
-          ) : (
-            <div className="flex items-center gap-3 p-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/20 text-sm font-bold text-primary">
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-primary/[0.08] via-card to-card">
+            <div className="flex items-center gap-3.5 p-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/20 text-sm font-bold text-primary">
                 FO
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-foreground">
+                <p className="truncate text-base font-semibold text-foreground">
                   Foydalanuvchi
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
@@ -181,113 +234,91 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setIsLoggedIn(false)}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
+                className="flex items-center gap-1.5 rounded-xl bg-destructive/10 px-3.5 py-2 text-xs font-semibold text-destructive transition-all duration-200 hover:bg-destructive/20 active:scale-95"
               >
                 <LogOut size={14} />
                 Chiqish
               </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Reading Settings */}
+        {/* ── Reading Settings ── */}
         <SectionTitle>O'qish sozlamalari</SectionTitle>
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-card">
           <SettingItem
-            icon={<BookOpen size={20} />}
+            icon={<BookOpen size={18} />}
             label="O'qish yo'nalishi"
+            subtitle="Sahifalar tartibi"
             value={
-              <div className="flex items-center gap-1 overflow-hidden rounded-lg border border-border text-xs font-medium">
-                <button
-                  type="button"
-                  onClick={() => setReadingDirection("rtl")}
-                  className={`px-3 py-1.5 transition-colors ${
-                    readingDirection === "rtl"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  RTL
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReadingDirection("ltr")}
-                  className={`px-3 py-1.5 transition-colors ${
-                    readingDirection === "ltr"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  LTR
-                </button>
-              </div>
+              <SegmentedControl
+                options={[
+                  { label: "RTL", value: "rtl" as const },
+                  { label: "LTR", value: "ltr" as const },
+                ]}
+                value={readingDirection}
+                onChange={setReadingDirection}
+              />
             }
           />
           <SettingItem
-            icon={<Smartphone size={20} />}
+            icon={<Smartphone size={18} />}
+            iconBg="bg-blue-500/10 text-blue-400"
             label="O'qish rejimi"
+            subtitle="Scroll yoki sahifali"
             value={
-              <div className="flex items-center gap-1 overflow-hidden rounded-lg border border-border text-xs font-medium">
-                <button
-                  type="button"
-                  onClick={() => setReadingMode("webtoon")}
-                  className={`px-3 py-1.5 transition-colors ${
-                    readingMode === "webtoon"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Webtoon
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReadingMode("paged")}
-                  className={`px-3 py-1.5 transition-colors ${
-                    readingMode === "paged"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Sahifali
-                </button>
-              </div>
+              <SegmentedControl
+                options={[
+                  { label: "Webtoon", value: "webtoon" as const },
+                  { label: "Sahifali", value: "paged" as const },
+                ]}
+                value={readingMode}
+                onChange={setReadingMode}
+              />
             }
           />
-          <div className="px-4 py-3.5">
-            <div className="mb-2 flex items-center gap-3">
-              <span className="text-muted-foreground">
-                <Eye size={20} />
+          {/* Brightness slider */}
+          <div className="border-b-0 px-4 py-4">
+            <div className="mb-3 flex items-center gap-3.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400">
+                <Eye size={18} />
               </span>
               <span className="flex-1 text-sm font-medium text-foreground">
                 Yorqinlik
               </span>
-              <span className="text-sm text-muted-foreground">
+              <span className="min-w-[3ch] text-right text-sm font-semibold text-primary">
                 {brightness}%
               </span>
             </div>
-            <input
-              type="range"
-              min={10}
-              max={100}
-              value={brightness}
-              onChange={(e) => setBrightness(Number(e.target.value))}
-              className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
-            />
+            <div className="px-1">
+              <input
+                type="range"
+                min={10}
+                max={100}
+                value={brightness}
+                onChange={(e) => setBrightness(Number(e.target.value))}
+                className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-muted accent-primary"
+              />
+            </div>
           </div>
         </div>
 
-        {/* App Settings */}
-        <SectionTitle>Ilovalar sozlamalari</SectionTitle>
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
+        {/* ── App Settings ── */}
+        <SectionTitle>Ilova sozlamalari</SectionTitle>
+        <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-card">
           <SettingItem
-            icon={<Globe size={20} />}
+            icon={<Globe size={18} />}
+            iconBg="bg-indigo-500/10 text-indigo-400"
             label="Til"
+            subtitle="Interfeys tili"
             value="O'zbekcha"
             showChevron
           />
           <SettingItem
-            icon={<Bell size={20} />}
+            icon={<Bell size={18} />}
+            iconBg="bg-rose-500/10 text-rose-400"
             label="Bildirishnomalar"
+            subtitle="Yangi boblar haqida"
             value={
               <Toggle
                 enabled={notifications}
@@ -296,46 +327,59 @@ export default function SettingsPage() {
             }
           />
           <SettingItem
-            icon={<Moon size={20} />}
+            icon={<Palette size={18} />}
+            iconBg="bg-purple-500/10 text-purple-400"
             label="Mavzu"
+            subtitle="Ilova ko'rinishi"
             value="Qorong'u"
             showChevron
             last
           />
         </div>
 
-        {/* Information */}
+        {/* ── Information ── */}
         <SectionTitle>Ma'lumot</SectionTitle>
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-card">
           <SettingItem
-            icon={<HelpCircle size={20} />}
+            icon={<HelpCircle size={18} />}
+            iconBg="bg-cyan-500/10 text-cyan-400"
             label="Yordam"
+            subtitle="Ko'p so'raladigan savollar"
             showChevron
           />
           <SettingItem
-            icon={<Shield size={20} />}
-            label="Maxfiylik"
+            icon={<Shield size={18} />}
+            iconBg="bg-emerald-500/10 text-emerald-400"
+            label="Maxfiylik siyosati"
             showChevron
           />
           <SettingItem
-            icon={<Info size={20} />}
+            icon={<Info size={18} />}
+            iconBg="bg-sky-500/10 text-sky-400"
             label="Ilova haqida"
-            value="1.0.0"
+            value={
+              <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                v1.0.0
+              </span>
+            }
             last
           />
         </div>
 
-        {/* Danger Zone */}
+        {/* ── Danger Zone ── */}
         <SectionTitle>Xavfli zona</SectionTitle>
-        <div className="mb-8 overflow-hidden rounded-xl border border-border bg-card">
+        <div className="mb-8 overflow-hidden rounded-2xl border border-destructive/10 bg-card">
           <SettingItem
-            icon={<Trash2 size={20} />}
+            icon={<Trash2 size={18} />}
+            iconBg="bg-orange-500/10 text-orange-400"
             label="Keshni tozalash"
+            subtitle="Vaqtinchalik fayllarni o'chirish"
             showChevron
           />
           <SettingItem
-            icon={<Trash2 size={20} />}
+            icon={<Trash2 size={18} />}
             label="Hisobni o'chirish"
+            subtitle="Bu amalni qaytarib bo'lmaydi"
             destructive
             last
           />
