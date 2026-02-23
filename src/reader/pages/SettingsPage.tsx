@@ -1,4 +1,10 @@
-import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+} from "react";
 import {
   User,
   Globe,
@@ -15,9 +21,44 @@ import {
   Sparkles,
   Palette,
   AlertTriangle,
+  Check,
+  X,
+  Database,
 } from "lucide-react";
 
-/* ───── Confirm Modal ───── */
+/* ─────────────────────────────────────────────
+   Helpers
+   ───────────────────────────────────────────── */
+
+/** Trigger haptic feedback if available */
+function haptic(ms = 15) {
+  try {
+    navigator?.vibrate?.(ms);
+  } catch {
+    /* not supported */
+  }
+}
+
+/** localStorage wrapper */
+function loadSetting<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(`settings:${key}`);
+    return raw !== null ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function saveSetting<T>(key: string, value: T) {
+  try {
+    localStorage.setItem(`settings:${key}`, JSON.stringify(value));
+  } catch {
+    /* quota exceeded etc */
+  }
+}
+
+/* ─────────────────────────────────────────────
+   Confirm Bottom-Sheet Modal (drag-to-dismiss)
+   ───────────────────────────────────────────── */
 function ConfirmModal({
   open,
   title,
@@ -33,16 +74,77 @@ function ConfirmModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  if (!open) return null;
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const dragStartY = useRef(0);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [closing, setClosing] = useState(false);
+
+  // Body scroll lock
+  useEffect(() => {
+    if (open) {
+      document.body.classList.add("modal-open");
+    } else {
+      document.body.classList.remove("modal-open");
+    }
+    return () => document.body.classList.remove("modal-open");
+  }, [open]);
+
+  function handleClose() {
+    haptic(10);
+    setClosing(true);
+    setTimeout(() => {
+      setClosing(false);
+      setDragOffset(0);
+      onCancel();
+    }, 200);
+  }
+
+  function onTouchStart(e: React.TouchEvent) {
+    dragStartY.current = e.touches[0].clientY;
+  }
+  function onTouchMove(e: React.TouchEvent) {
+    const dy = e.touches[0].clientY - dragStartY.current;
+    if (dy > 0) setDragOffset(dy);
+  }
+  function onTouchEnd() {
+    if (dragOffset > 100) {
+      handleClose();
+    } else {
+      setDragOffset(0);
+    }
+  }
+
+  if (!open && !closing) return null;
+
   return (
     <div
-      className="settings-overlay fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 pb-8 sm:items-center sm:pb-0"
-      onClick={onCancel}
+      className={`fixed inset-0 z-50 flex items-end justify-center sm:items-center ${
+        closing ? "animate-[settings-overlay-in_0.2s_ease-in_reverse_forwards]" : "settings-overlay"
+      }`}
+      style={{ backgroundColor: `rgba(0,0,0,${closing ? 0 : 0.6})` }}
+      onClick={handleClose}
     >
       <div
-        className="settings-modal w-full max-w-sm overflow-hidden rounded-2xl border border-white/[0.08] bg-card"
+        ref={sheetRef}
+        className={`w-full max-w-sm overflow-hidden rounded-t-2xl border border-white/[0.08] bg-card sm:mb-0 sm:rounded-2xl ${
+          closing
+            ? "animate-[settings-modal-in_0.2s_ease-in_reverse_forwards]"
+            : "settings-modal"
+        }`}
+        style={{
+          transform: dragOffset > 0 ? `translateY(${dragOffset}px)` : undefined,
+          transition: dragOffset > 0 ? "none" : undefined,
+        }}
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
       >
+        {/* Drag handle */}
+        <div className="flex justify-center pb-1 pt-3">
+          <div className="h-1 w-10 rounded-full bg-white/20" />
+        </div>
+
         <div className="p-5 text-center">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/15">
             <AlertTriangle size={24} className="text-destructive" />
@@ -53,14 +155,17 @@ function ConfirmModal({
         <div className="flex border-t border-white/[0.06]">
           <button
             type="button"
-            onClick={onCancel}
+            onClick={handleClose}
             className="flex-1 px-4 py-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[0.03] active:bg-white/[0.06]"
           >
             Bekor qilish
           </button>
           <button
             type="button"
-            onClick={onConfirm}
+            onClick={() => {
+              haptic(25);
+              onConfirm();
+            }}
             className="flex-1 border-l border-white/[0.06] px-4 py-3.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10 active:bg-destructive/15"
           >
             {confirmLabel}
@@ -71,63 +176,124 @@ function ConfirmModal({
   );
 }
 
-/* ───── Toast ───── */
+/* ─────────────────────────────────────────────
+   Toast (with icon + enter/exit animation)
+   ───────────────────────────────────────────── */
 function Toast({
   message,
+  type = "success",
   visible,
   onDone,
 }: {
   message: string;
+  type?: "success" | "error" | "info";
   visible: boolean;
   onDone: () => void;
 }) {
+  const [exiting, setExiting] = useState(false);
+
   useEffect(() => {
     if (!visible) return;
-    const t = setTimeout(onDone, 2200);
+    setExiting(false);
+    const t = setTimeout(() => {
+      setExiting(true);
+      setTimeout(onDone, 200);
+    }, 2000);
     return () => clearTimeout(t);
   }, [visible, onDone]);
 
-  if (!visible) return null;
+  if (!visible && !exiting) return null;
+
+  const icon =
+    type === "success" ? (
+      <Check size={16} className="text-primary" />
+    ) : type === "error" ? (
+      <X size={16} className="text-destructive" />
+    ) : (
+      <Info size={16} className="text-blue-400" />
+    );
+
   return (
-    <div className="settings-modal fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-white/[0.08] bg-card px-5 py-3 text-sm font-medium text-foreground shadow-xl">
+    <div
+      className={`fixed bottom-24 left-1/2 z-50 flex items-center gap-2.5 rounded-xl border border-white/[0.08] bg-card px-4 py-3 text-sm font-medium text-foreground shadow-xl ${
+        exiting ? "toast-exit" : "toast-enter"
+      }`}
+    >
+      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06]">
+        {icon}
+      </span>
       {message}
     </div>
   );
 }
 
-/* ───── Toggle ───── */
-function Toggle({
-  enabled,
-  onToggle,
-}: {
-  enabled: boolean;
-  onToggle: () => void;
-}) {
+/* ─────────────────────────────────────────────
+   Auto-save indicator
+   ───────────────────────────────────────────── */
+function SavedIndicator({ show }: { show: boolean }) {
+  if (!show) return null;
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={enabled}
-      onClick={onToggle}
-      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-all duration-300 ${
-        enabled
-          ? "bg-primary shadow-[0_0_12px_hsl(153_60%_53%/0.35)]"
-          : "bg-muted"
-      }`}
-    >
-      <span
-        className="pointer-events-none inline-block rounded-full bg-white shadow-md transition-all duration-300"
-        style={{
-          height: 20,
-          width: 20,
-          transform: enabled ? "translateX(26px)" : "translateX(4px)",
-        }}
-      />
-    </button>
+    <span className="saved-indicator ml-2 inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+      <Check size={12} />
+      Saqlandi
+    </span>
   );
 }
 
-/* ───── Segmented Control with sliding indicator ───── */
+/* ─────────────────────────────────────────────
+   Toggle (with state label for accessibility)
+   ───────────────────────────────────────────── */
+function Toggle({
+  enabled,
+  onToggle,
+  showLabel = false,
+}: {
+  enabled: boolean;
+  onToggle: () => void;
+  showLabel?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      {showLabel && (
+        <span
+          className={`text-[11px] font-medium transition-colors duration-200 ${
+            enabled ? "text-primary" : "text-muted-foreground"
+          }`}
+        >
+          {enabled ? "Yoqilgan" : "O'chirilgan"}
+        </span>
+      )}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={enabled ? "Yoqilgan" : "O'chirilgan"}
+        onClick={() => {
+          haptic();
+          onToggle();
+        }}
+        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition-all duration-300 ${
+          enabled
+            ? "bg-primary shadow-[0_0_12px_hsl(153_60%_53%/0.35)]"
+            : "bg-muted"
+        }`}
+      >
+        <span
+          className="pointer-events-none inline-block rounded-full bg-white shadow-md transition-all duration-300"
+          style={{
+            height: 20,
+            width: 20,
+            transform: enabled ? "translateX(26px)" : "translateX(4px)",
+          }}
+        />
+      </button>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Segmented Control (sliding indicator)
+   ───────────────────────────────────────────── */
 function SegmentedControl<T extends string>({
   options,
   value,
@@ -149,10 +315,7 @@ function SegmentedControl<T extends string>({
     );
     const btn = buttons[activeIndex];
     if (!btn) return;
-    setIndicator({
-      left: btn.offsetLeft,
-      width: btn.offsetWidth,
-    });
+    setIndicator({ left: btn.offsetLeft, width: btn.offsetWidth });
   }, [activeIndex]);
 
   return (
@@ -160,7 +323,6 @@ function SegmentedControl<T extends string>({
       ref={containerRef}
       className="relative flex items-center rounded-lg bg-background p-1"
     >
-      {/* sliding pill */}
       <div
         className="absolute top-1 h-[calc(100%-8px)] rounded-md bg-primary shadow-sm shadow-primary/25 transition-all duration-250 ease-out"
         style={{ left: indicator.left, width: indicator.width }}
@@ -170,7 +332,10 @@ function SegmentedControl<T extends string>({
           key={opt.value}
           data-seg-btn
           type="button"
-          onClick={() => onChange(opt.value)}
+          onClick={() => {
+            haptic();
+            onChange(opt.value);
+          }}
           className={`relative z-10 rounded-md px-4 py-2 text-xs font-semibold transition-colors duration-200 ${
             value === opt.value
               ? "text-primary-foreground"
@@ -184,11 +349,13 @@ function SegmentedControl<T extends string>({
   );
 }
 
-/* ───── Setting Item ───── */
+/* ─────────────────────────────────────────────
+   Setting Item
+   ───────────────────────────────────────────── */
 interface SettingItemProps {
   icon: React.ReactNode;
   iconBg?: string;
-  label: string;
+  label: React.ReactNode;
   subtitle?: string;
   value?: React.ReactNode;
   onClick?: () => void;
@@ -250,7 +417,9 @@ function SettingItem({
   );
 }
 
-/* ───── Section Title ───── */
+/* ─────────────────────────────────────────────
+   Section Title
+   ───────────────────────────────────────────── */
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <h3 className="mb-1.5 px-1 pt-6 text-[11px] font-bold uppercase tracking-widest text-muted-foreground/70">
@@ -259,7 +428,9 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* ───── Animated Section wrapper ───── */
+/* ─────────────────────────────────────────────
+   Animated Section wrapper
+   ───────────────────────────────────────────── */
 function AnimatedSection({
   children,
   delay,
@@ -277,45 +448,148 @@ function AnimatedSection({
   );
 }
 
+/* ─────────────────────────────────────────────
+   Skeleton for profile loading
+   ───────────────────────────────────────────── */
+function ProfileSkeleton() {
+  return (
+    <div className="flex items-center gap-3.5 p-5">
+      <div className="skeleton h-14 w-14 shrink-0 rounded-2xl" />
+      <div className="flex-1 space-y-2.5">
+        <div className="skeleton h-4 w-32 rounded" />
+        <div className="skeleton h-3 w-48 rounded" />
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════
    Main SettingsPage
    ═══════════════════════════════════════════════ */
 export default function SettingsPage() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  /* ── State with localStorage persistence ── */
+  const [isLoggedIn, setIsLoggedIn] = useState(() =>
+    loadSetting("isLoggedIn", false),
+  );
   const [loginLoading, setLoginLoading] = useState(false);
-  const [readingDirection, setReadingDirection] = useState<"rtl" | "ltr">(
-    "rtl",
+  const [readingDirection, setReadingDirection] = useState<"rtl" | "ltr">(() =>
+    loadSetting("readingDirection", "rtl"),
   );
-  const [readingMode, setReadingMode] = useState<"webtoon" | "paged">(
-    "webtoon",
+  const [readingMode, setReadingMode] = useState<"webtoon" | "paged">(() =>
+    loadSetting("readingMode", "webtoon"),
   );
-  const [brightness, setBrightness] = useState(80);
-  const [notifications, setNotifications] = useState(true);
+  const [brightness, setBrightness] = useState(() =>
+    loadSetting("brightness", 80),
+  );
+  const [notifications, setNotifications] = useState(() =>
+    loadSetting("notifications", true),
+  );
 
-  // Confirm modal state
+  // Scroll state for header shadow
+  const [scrolled, setScrolled] = useState(false);
+
+  // Confirm modal
   const [confirmModal, setConfirmModal] = useState<{
     open: boolean;
     title: string;
     description: string;
     confirmLabel: string;
     onConfirm: () => void;
-  }>({ open: false, title: "", description: "", confirmLabel: "", onConfirm: () => {} });
+  }>({
+    open: false,
+    title: "",
+    description: "",
+    confirmLabel: "",
+    onConfirm: () => {},
+  });
 
-  // Toast state
-  const [toast, setToast] = useState({ visible: false, message: "" });
-  function showToast(message: string) {
-    setToast({ visible: true, message });
+  // Toast
+  const [toast, setToast] = useState({
+    visible: false,
+    message: "",
+    type: "success" as "success" | "error" | "info",
+  });
+
+  // Auto-save indicator
+  const [savedKey, setSavedKey] = useState<string | null>(null);
+
+  // Fake cache size
+  const [cacheSize] = useState(() => {
+    return (Math.random() * 40 + 8).toFixed(1);
+  });
+
+  // Profile loading skeleton
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  /* ── Persist settings ── */
+  useEffect(() => {
+    saveSetting("readingDirection", readingDirection);
+  }, [readingDirection]);
+  useEffect(() => {
+    saveSetting("readingMode", readingMode);
+  }, [readingMode]);
+  useEffect(() => {
+    saveSetting("brightness", brightness);
+  }, [brightness]);
+  useEffect(() => {
+    saveSetting("notifications", notifications);
+  }, [notifications]);
+  useEffect(() => {
+    saveSetting("isLoggedIn", isLoggedIn);
+  }, [isLoggedIn]);
+
+  /* ── Scroll listener for header shadow ── */
+  useEffect(() => {
+    function onScroll() {
+      setScrolled(window.scrollY > 8);
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  /* ── Auto-save flash ── */
+  function flashSaved(key: string) {
+    setSavedKey(key);
+    setTimeout(() => setSavedKey(null), 1200);
   }
 
+  const showToast = useCallback(
+    (message: string, type: "success" | "error" | "info" = "success") => {
+      setToast({ visible: true, message, type });
+    },
+    [],
+  );
+
+  /* ── Setting change handlers with auto-save ── */
+  function changeDirection(v: "rtl" | "ltr") {
+    setReadingDirection(v);
+    flashSaved("direction");
+  }
+  function changeMode(v: "webtoon" | "paged") {
+    setReadingMode(v);
+    flashSaved("mode");
+  }
+  function changeBrightness(v: number) {
+    setBrightness(v);
+  }
+  function toggleNotifications() {
+    setNotifications((prev) => !prev);
+    flashSaved("notifications");
+  }
+
+  /* ── Auth handlers ── */
   function handleLogin() {
     setLoginLoading(true);
+    setProfileLoading(true);
     setTimeout(() => {
       setIsLoggedIn(true);
       setLoginLoading(false);
+      setTimeout(() => setProfileLoading(false), 800);
     }, 1200);
   }
 
   function handleLogout() {
+    haptic(20);
     setConfirmModal({
       open: true,
       title: "Chiqishni tasdiqlang",
@@ -330,11 +604,11 @@ export default function SettingsPage() {
   }
 
   function handleClearCache() {
+    haptic(20);
     setConfirmModal({
       open: true,
       title: "Keshni tozalash",
-      description:
-        "Barcha vaqtinchalik fayllar o'chiriladi. Davom etasizmi?",
+      description: `${cacheSize} MB vaqtinchalik fayllar o'chiriladi. Davom etasizmi?`,
       confirmLabel: "Tozalash",
       onConfirm: () => {
         setConfirmModal((m) => ({ ...m, open: false }));
@@ -344,6 +618,7 @@ export default function SettingsPage() {
   }
 
   function handleDeleteAccount() {
+    haptic(30);
     setConfirmModal({
       open: true,
       title: "Hisobni o'chirish",
@@ -358,10 +633,19 @@ export default function SettingsPage() {
     });
   }
 
+  /* ── Slider filled track percentage ── */
+  const sliderPercent = ((brightness - 10) / 90) * 100;
+
   return (
     <div className="min-h-screen bg-background pb-28">
-      {/* Header */}
-      <header className="sticky top-0 z-40 flex items-center gap-2.5 bg-background/90 px-4 py-3 backdrop-blur-lg">
+      {/* ── Sticky Header with scroll shadow ── */}
+      <header
+        className={`sticky top-0 z-40 flex items-center gap-2.5 px-4 py-3 backdrop-blur-lg transition-all duration-300 ${
+          scrolled
+            ? "bg-background/95 shadow-[0_1px_12px_rgba(0,0,0,0.4)]"
+            : "bg-background/90"
+        }`}
+      >
         <Sparkles size={20} className="text-primary" />
         <h1 className="text-xl font-bold tracking-tight text-foreground">
           Sozlamalar
@@ -372,91 +656,82 @@ export default function SettingsPage() {
         {/* ── Profile Section ── */}
         <AnimatedSection delay={0}>
           <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-primary/[0.08] via-card to-card">
-            {/* Profile transition wrapper */}
-            <div
-              className="grid transition-all duration-500 ease-in-out"
-              style={{
-                gridTemplateRows: "1fr",
-              }}
-            >
-              {!isLoggedIn ? (
-                <div className="min-h-0 overflow-hidden transition-opacity duration-400"
-                  key="logged-out"
-                >
-                  <div className="p-5">
-                    <div className="mb-4 flex items-center gap-3.5">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15">
-                        <User size={26} className="text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-base font-semibold text-foreground">
-                          Kirish
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Hisobingiz bilan sinxronlang
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleLogin}
-                      disabled={loginLoading}
-                      className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/[0.08] bg-card px-4 py-3 text-sm font-semibold text-foreground transition-all duration-200 hover:bg-white/[0.06] active:scale-[0.98] disabled:opacity-60"
-                    >
-                      {loginLoading ? (
-                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                      ) : (
-                        <svg className="h-5 w-5" viewBox="0 0 24 24">
-                          <path
-                            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-                            fill="#4285F4"
-                          />
-                          <path
-                            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                            fill="#34A853"
-                          />
-                          <path
-                            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                            fill="#FBBC05"
-                          />
-                          <path
-                            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                            fill="#EA4335"
-                          />
-                        </svg>
-                      )}
-                      {loginLoading ? "Kirish..." : "Google bilan kirish"}
-                    </button>
+            {!isLoggedIn && !profileLoading ? (
+              /* Logged out */
+              <div className="p-5">
+                <div className="mb-4 flex items-center gap-3.5">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15">
+                    <User size={26} className="text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-base font-semibold text-foreground">
+                      Kirish
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Hisobingiz bilan sinxronlang
+                    </p>
                   </div>
                 </div>
-              ) : (
-                <div className="min-h-0 overflow-hidden transition-opacity duration-400"
-                  key="logged-in"
+                <button
+                  type="button"
+                  onClick={handleLogin}
+                  disabled={loginLoading}
+                  className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/[0.08] bg-card px-4 py-3 text-sm font-semibold text-foreground transition-all duration-200 hover:bg-white/[0.06] active:scale-[0.98] disabled:opacity-60"
                 >
-                  <div className="flex items-center gap-3.5 p-4">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/20 text-sm font-bold text-primary">
-                      FO
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-base font-semibold text-foreground">
-                        Foydalanuvchi
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        user@gmail.com
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="flex items-center gap-1.5 rounded-xl bg-destructive/10 px-3.5 py-2 text-xs font-semibold text-destructive transition-all duration-200 hover:bg-destructive/20 active:scale-95"
-                    >
-                      <LogOut size={14} />
-                      Chiqish
-                    </button>
+                  {loginLoading ? (
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  ) : (
+                    <svg className="h-5 w-5" viewBox="0 0 24 24">
+                      <path
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+                        fill="#4285F4"
+                      />
+                      <path
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        fill="#34A853"
+                      />
+                      <path
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                        fill="#FBBC05"
+                      />
+                      <path
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                        fill="#EA4335"
+                      />
+                    </svg>
+                  )}
+                  {loginLoading ? "Kirish..." : "Google bilan kirish"}
+                </button>
+              </div>
+            ) : profileLoading ? (
+              /* Skeleton loading */
+              <ProfileSkeleton />
+            ) : (
+              /* Logged in with gradient ring avatar */
+              <div className="flex items-center gap-3.5 p-4">
+                <div className="avatar-gradient-ring">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/20 text-sm font-bold text-primary">
+                    FO
                   </div>
                 </div>
-              )}
-            </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-base font-semibold text-foreground">
+                    Foydalanuvchi
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    user@gmail.com
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex items-center gap-1.5 rounded-xl bg-destructive/10 px-3.5 py-2 text-xs font-semibold text-destructive transition-all duration-200 hover:bg-destructive/20 active:scale-95"
+                >
+                  <LogOut size={14} />
+                  Chiqish
+                </button>
+              </div>
+            )}
           </div>
         </AnimatedSection>
 
@@ -466,7 +741,12 @@ export default function SettingsPage() {
           <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-card">
             <SettingItem
               icon={<BookOpen size={18} />}
-              label="O'qish yo'nalishi"
+              label={
+                <>
+                  O'qish yo'nalishi
+                  <SavedIndicator show={savedKey === "direction"} />
+                </>
+              }
               subtitle="Sahifalar tartibi"
               value={
                 <SegmentedControl
@@ -475,14 +755,19 @@ export default function SettingsPage() {
                     { label: "LTR", value: "ltr" as const },
                   ]}
                   value={readingDirection}
-                  onChange={setReadingDirection}
+                  onChange={changeDirection}
                 />
               }
             />
             <SettingItem
               icon={<Smartphone size={18} />}
               iconBg="bg-blue-500/10 text-blue-400"
-              label="O'qish rejimi"
+              label={
+                <>
+                  O'qish rejimi
+                  <SavedIndicator show={savedKey === "mode"} />
+                </>
+              }
               subtitle="Scroll yoki sahifali"
               value={
                 <SegmentedControl
@@ -491,11 +776,11 @@ export default function SettingsPage() {
                     { label: "Sahifali", value: "paged" as const },
                   ]}
                   value={readingMode}
-                  onChange={setReadingMode}
+                  onChange={changeMode}
                 />
               }
             />
-            {/* Brightness slider */}
+            {/* Brightness slider with filled track */}
             <div className="px-4 py-4">
               <div className="mb-3 flex items-center gap-3.5">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400">
@@ -514,8 +799,11 @@ export default function SettingsPage() {
                   min={10}
                   max={100}
                   value={brightness}
-                  onChange={(e) => setBrightness(Number(e.target.value))}
+                  onChange={(e) => changeBrightness(Number(e.target.value))}
                   className="settings-slider"
+                  style={{
+                    background: `linear-gradient(to right, hsl(153 60% 53%) 0%, hsl(153 60% 53%) ${sliderPercent}%, hsl(var(--muted)) ${sliderPercent}%, hsl(var(--muted)) 100%)`,
+                  }}
                 />
               </div>
             </div>
@@ -532,18 +820,24 @@ export default function SettingsPage() {
               label="Til"
               subtitle="Interfeys tili"
               value="O'zbekcha"
-              onClick={() => showToast("Til sozlamalari tez kunda")}
+              onClick={() => showToast("Til sozlamalari tez kunda", "info")}
               showChevron
             />
             <SettingItem
               icon={<Bell size={18} />}
               iconBg="bg-rose-500/10 text-rose-400"
-              label="Bildirishnomalar"
+              label={
+                <>
+                  Bildirishnomalar
+                  <SavedIndicator show={savedKey === "notifications"} />
+                </>
+              }
               subtitle="Yangi boblar haqida"
               value={
                 <Toggle
                   enabled={notifications}
-                  onToggle={() => setNotifications(!notifications)}
+                  onToggle={toggleNotifications}
+                  showLabel
                 />
               }
             />
@@ -553,7 +847,7 @@ export default function SettingsPage() {
               label="Mavzu"
               subtitle="Ilova ko'rinishi"
               value="Qorong'u"
-              onClick={() => showToast("Mavzu sozlamalari tez kunda")}
+              onClick={() => showToast("Mavzu sozlamalari tez kunda", "info")}
               showChevron
               last
             />
@@ -569,14 +863,16 @@ export default function SettingsPage() {
               iconBg="bg-cyan-500/10 text-cyan-400"
               label="Yordam"
               subtitle="Ko'p so'raladigan savollar"
-              onClick={() => showToast("Yordam sahifasi tez kunda")}
+              onClick={() => showToast("Yordam sahifasi tez kunda", "info")}
               showChevron
             />
             <SettingItem
               icon={<Shield size={18} />}
               iconBg="bg-emerald-500/10 text-emerald-400"
               label="Maxfiylik siyosati"
-              onClick={() => showToast("Maxfiylik siyosati tez kunda")}
+              onClick={() =>
+                showToast("Maxfiylik siyosati tez kunda", "info")
+              }
               showChevron
             />
             <SettingItem
@@ -588,21 +884,26 @@ export default function SettingsPage() {
                   v1.0.0
                 </span>
               }
-              onClick={() => showToast("MangaReader v1.0.0")}
+              onClick={() => showToast("MangaReader v1.0.0", "info")}
               last
             />
           </div>
         </AnimatedSection>
 
-        {/* ── Danger Zone ── */}
+        {/* ── Danger Zone (with glow) ── */}
         <AnimatedSection delay={240}>
           <SectionTitle>Xavfli zona</SectionTitle>
-          <div className="mb-8 overflow-hidden rounded-2xl border border-destructive/10 bg-card">
+          <div className="danger-glow mb-8 overflow-hidden rounded-2xl border border-destructive/10 bg-card">
             <SettingItem
-              icon={<Trash2 size={18} />}
+              icon={<Database size={18} />}
               iconBg="bg-orange-500/10 text-orange-400"
               label="Keshni tozalash"
               subtitle="Vaqtinchalik fayllarni o'chirish"
+              value={
+                <span className="rounded-md bg-orange-500/10 px-2 py-0.5 text-[11px] font-semibold text-orange-400">
+                  {cacheSize} MB
+                </span>
+              }
               onClick={handleClearCache}
               showChevron
             />
@@ -631,6 +932,7 @@ export default function SettingsPage() {
       {/* Toast */}
       <Toast
         message={toast.message}
+        type={toast.type}
         visible={toast.visible}
         onDone={() => setToast((t) => ({ ...t, visible: false }))}
       />
