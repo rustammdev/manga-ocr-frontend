@@ -30,10 +30,10 @@ export default function NewProjectPage() {
   const [titleJa, setTitleJa] = useState("");
   const [titleKo, setTitleKo] = useState("");
   const [tags, setTags] = useState<string[]>([]);
-  const [language, setLanguage] = useState<"ja" | "ko" | "ru" | "en">("ja");
-  const [backend, setBackend] = useState<"openai" | "ollama" | "gemini">("openai");
-  const [ocrBackend, setOcrBackend] = useState<OcrBackendValue>("auto");
-  const [cleanerBackend, setCleanerBackend] = useState<CleanerBackendValue>("pcleaner");
+  const [language, setLanguage] = useState<"ja" | "ko" | "ru" | "en">("en");
+  const [backend, setBackend] = useState<"openai" | "ollama" | "gemini">("gemini");
+  const [ocrBackend, setOcrBackend] = useState<OcrBackendValue>("yolo_florence");
+  const [cleanerBackend, setCleanerBackend] = useState<CleanerBackendValue>("lama");
   const [translatorModel, setTranslatorModel] = useState("");
   const [modelsMap, setModelsMap] = useState<TranslatorModelsMap>({});
 
@@ -201,8 +201,8 @@ export default function NewProjectPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="pcleaner">PCleaner (default)</SelectItem>
-                <SelectItem value="lama">LaMa (best)</SelectItem>
+                <SelectItem value="pcleaner">PCleaner</SelectItem>
+                <SelectItem value="lama">LaMa (default)</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -11,7 +11,6 @@ import ImagePanel from "../components/results/ImagePanel";
 import RegionPanel from "../components/results/RegionPanel";
 import type { RegionDraft } from "../components/results/RegionPanel";
 import TranslationTextsView from "../components/results/TranslationTextsView";
-import ReadingOverlay from "../components/results/ReadingOverlay";
 import ActionSidebar from "../components/results/ActionSidebar";
 import RerunOcrModal from "../components/results/RerunOcrModal";
 
@@ -44,6 +43,7 @@ const DEFAULT_SETTINGS: ProjectSettings = {
   cleaner_backend: "pcleaner",
   translator_model: "",
   limit: 0,
+  detect_dark_bubbles: false,
 };
 
 export default function ResultsPage() {
@@ -94,6 +94,13 @@ export default function ResultsPage() {
   const drawCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const originalWrapRef = useRef<HTMLDivElement | null>(null);
   const cleanWrapRef = useRef<HTMLDivElement | null>(null);
+
+  // Reading mode refs
+  const pageImgRefs = useRef<(HTMLImageElement | null)[]>([]);
+  const pageTextCanvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
+  const pageDrawCanvasRefs = useRef<(HTMLCanvasElement | null)[]>([]);
+  const readingScrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollTriggeredRef = useRef(false);
 
   useEffect(() => {
     if (!manga || !chapter) return;
@@ -202,6 +209,69 @@ export default function ResultsPage() {
     }
   }, [data, currentPage, pages, regionsWithDraftFontSize, renderBboxes, renderTextOverlay]);
 
+  // Reading mode: faqat ko'rinadigan sahifalarda matn overlay render qilish (lazy)
+  useEffect(() => {
+    if (!readingOpen || !data) return;
+    const container = readingScrollRef.current;
+    if (!container) return;
+
+    function renderPage(idx: number) {
+      const page = pages[idx];
+      if (!page) return;
+      const canvas = pageTextCanvasRefs.current[idx];
+      const img = pageImgRefs.current[idx];
+      if (!canvas || !img || !img.complete || !img.naturalWidth) return;
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.style.width = `${img.clientWidth}px`;
+      canvas.style.height = `${img.clientHeight}px`;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawTranslatedTexts(ctx, page.regions || []);
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const idx = Number(entry.target.getAttribute("data-page-idx"));
+            if (!Number.isNaN(idx)) {
+              document.fonts.ready.then(() => renderPage(idx));
+            }
+          }
+        }
+      },
+      { root: container, rootMargin: "200px 0px" },
+    );
+
+    pageImgRefs.current.forEach((img, idx) => {
+      const el = img?.parentElement;
+      if (el) {
+        el.setAttribute("data-page-idx", String(idx));
+        observer.observe(el);
+      }
+    });
+
+    return () => observer.disconnect();
+  }, [readingOpen, data, pages]);
+
+  // Reading mode: aktiv sahifadagi draft o'zgarishlarni render qilish
+  useEffect(() => {
+    if (!readingOpen || !data) return;
+    const canvas = pageTextCanvasRefs.current[currentPage];
+    const img = pageImgRefs.current[currentPage];
+    if (!canvas || !img || !img.complete || !img.naturalWidth) return;
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.style.width = `${img.clientWidth}px`;
+    canvas.style.height = `${img.clientHeight}px`;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawTranslatedTexts(ctx, regionsWithDraftFontSize);
+  }, [readingOpen, data, currentPage, regionsWithDraftFontSize]);
+
   useEffect(() => {
     if (!data) return;
     const page = data.pages[currentPage];
@@ -258,8 +328,77 @@ export default function ResultsPage() {
       return next;
     });
     setConfirmingDelete(null);
-    setPageHasClean(false);
   }, [data, currentPage]);
+
+  // Sahifa almashganda clean state reset (faqat sahifa o'zgarganda)
+  useEffect(() => {
+    setPageHasClean(false);
+  }, [currentPage]);
+
+  // Reading mode: main reflarni aktiv sahifa elementlariga bog'lash
+  useEffect(() => {
+    if (!readingOpen) return;
+    cleanImgRef.current = pageImgRefs.current[currentPage] || null;
+    cleanCanvasRef.current = pageTextCanvasRefs.current[currentPage] || null;
+    drawCanvasRef.current = pageDrawCanvasRefs.current[currentPage] || null;
+    // Aktiv sahifaga scroll qilish (faqat tugma/klaviatura orqali, scroll orqali emas)
+    if (scrollTriggeredRef.current) {
+      scrollTriggeredRef.current = false;
+    } else {
+      const container = readingScrollRef.current;
+      const pageEl = pageImgRefs.current[currentPage]?.parentElement;
+      if (container && pageEl) {
+        const containerRect = container.getBoundingClientRect();
+        const pageRect = pageEl.getBoundingClientRect();
+        if (pageRect.top < containerRect.top || pageRect.bottom > containerRect.bottom) {
+          pageEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }
+    }
+  }, [readingOpen, currentPage]);
+
+  // Reading mode: scroll bo'lganda avtomatik sahifa almashish
+  useEffect(() => {
+    if (!readingOpen) return;
+    const container = readingScrollRef.current;
+    if (!container) return;
+
+    const ratios = new Map<number, number>();
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const idx = Number(entry.target.getAttribute("data-page-idx"));
+          if (!Number.isNaN(idx)) {
+            ratios.set(idx, entry.intersectionRatio);
+          }
+        }
+        let bestIdx = -1;
+        let bestRatio = 0;
+        ratios.forEach((ratio, idx) => {
+          if (ratio > bestRatio) {
+            bestRatio = ratio;
+            bestIdx = idx;
+          }
+        });
+        if (bestIdx >= 0 && bestRatio > 0.1) {
+          scrollTriggeredRef.current = true;
+          setCurrentPage(bestIdx);
+        }
+      },
+      { root: container, threshold: [0, 0.1, 0.3, 0.5, 0.7, 1] },
+    );
+
+    pageImgRefs.current.forEach((img, idx) => {
+      const el = img?.parentElement;
+      if (el) {
+        el.setAttribute("data-page-idx", String(idx));
+        observer.observe(el);
+      }
+    });
+
+    return () => observer.disconnect();
+  }, [readingOpen, pages.length, setCurrentPage]);
 
   /* ── Canvas mode hooks ── */
   useDrawingMode({
@@ -369,6 +508,17 @@ export default function ResultsPage() {
     setPenMode(false);
     setEyeDropperMode(false);
   }, []);
+
+  const handleToggleReading = useCallback(() => {
+    clearAllModes();
+    setReadingOpen((prev) => !prev);
+  }, [clearAllModes]);
+
+  const handleReadingPageClick = useCallback((idx: number) => {
+    if (currentPage !== idx) {
+      setCurrentPage(idx);
+    }
+  }, [currentPage, setCurrentPage]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -670,7 +820,8 @@ export default function ResultsPage() {
         setCurrentPage={setCurrentPage}
         setTranslating={setTranslating}
         setConfirmTranslate={setConfirmTranslate}
-        setReadingOpen={setReadingOpen}
+        readingOpen={readingOpen}
+        onToggleReading={handleToggleReading}
         onTranslateConfirm={handleTranslateConfirm}
         onRerunOcr={handleRerunOcr}
         onExport={handleExport}
@@ -682,7 +833,7 @@ export default function ResultsPage() {
       />
 
       {/* Sidebar + panels layout */}
-      <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[40px_1fr_1fr_340px]">
+      <div className={`grid min-h-0 flex-1 gap-2 ${readingOpen ? "lg:grid-cols-[40px_1fr_340px]" : "lg:grid-cols-[40px_1fr_1fr_340px]"}`}>
         <ActionSidebar
           drawingMode={drawingMode}
           cleanMode={cleanMode}
@@ -733,33 +884,87 @@ export default function ResultsPage() {
           onUndoClean={handleUndoClean}
         />
 
-        <ImagePanel
-          label="Original"
-          imgRef={originalImgRef}
-          canvasRef={originalCanvasRef}
-          wrapRef={originalWrapRef}
-          imgSrc={page.image_url}
-          imgAlt="Original"
-        >
-          <canvas
-            ref={ocrCanvasRef}
-            className={`absolute inset-0 ${ocrMode ? "cursor-crosshair" : "pointer-events-none"}`}
-          />
-        </ImagePanel>
+        {readingOpen ? (
+          /* ── Reading mode: continuous scroll ── */
+          <div ref={readingScrollRef} className="min-h-0 overflow-auto rounded-lg bg-black">
+            <div className="mx-auto max-w-3xl">
+              {pages.map((page, idx) => {
+                const isActive = idx === currentPage;
+                return (
+                  <div
+                    key={`rp-${idx}`}
+                    className={`relative leading-[0] ${isActive ? "ring-2 ring-primary ring-inset z-10" : "cursor-pointer"}`}
+                    onClick={() => handleReadingPageClick(idx)}
+                  >
+                    <img
+                      ref={(el) => { pageImgRefs.current[idx] = el; }}
+                      src={page.cleaned_image_url || page.image_url}
+                      alt={`Page ${idx + 1}`}
+                      loading="lazy"
+                      className="block w-full"
+                      onLoad={() => {
+                        const canvas = pageTextCanvasRefs.current[idx];
+                        const img = pageImgRefs.current[idx];
+                        if (!canvas || !img) return;
+                        canvas.width = img.naturalWidth;
+                        canvas.height = img.naturalHeight;
+                        canvas.style.width = `${img.clientWidth}px`;
+                        canvas.style.height = `${img.clientHeight}px`;
+                        const ctx = canvas.getContext("2d");
+                        if (!ctx) return;
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        drawTranslatedTexts(ctx, page.regions || []);
+                      }}
+                    />
+                    <canvas
+                      ref={(el) => { pageTextCanvasRefs.current[idx] = el; }}
+                      className="pointer-events-none absolute inset-0"
+                    />
+                    <canvas
+                      ref={(el) => { pageDrawCanvasRefs.current[idx] = el; }}
+                      className={`absolute inset-0 ${
+                        isActive
+                          ? (cleanMode || penMode ? "cursor-none" : eyeDropperMode ? "cursor-none" : drawingMode || lineCleanMode || bubbleMode ? "cursor-crosshair" : "")
+                          : "pointer-events-none"
+                      }`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* ── Normal mode: original + clean side by side ── */
+          <>
+            <ImagePanel
+              label="Original"
+              imgRef={originalImgRef}
+              canvasRef={originalCanvasRef}
+              wrapRef={originalWrapRef}
+              imgSrc={page.image_url}
+              imgAlt="Original"
+            >
+              <canvas
+                ref={ocrCanvasRef}
+                className={`absolute inset-0 ${ocrMode ? "cursor-crosshair" : "pointer-events-none"}`}
+              />
+            </ImagePanel>
 
-        <ImagePanel
-          label="Tarjima"
-          imgRef={cleanImgRef}
-          canvasRef={cleanCanvasRef}
-          wrapRef={cleanWrapRef}
-          imgSrc={page.cleaned_image_url}
-          imgAlt="Cleaned"
-        >
-          <canvas
-            ref={drawCanvasRef}
-            className={`absolute inset-0 ${cleanMode || penMode ? "cursor-none" : eyeDropperMode ? "cursor-none" : drawingMode || lineCleanMode || bubbleMode ? "cursor-crosshair" : ""}`}
-          />
-        </ImagePanel>
+            <ImagePanel
+              label="Tarjima"
+              imgRef={cleanImgRef}
+              canvasRef={cleanCanvasRef}
+              wrapRef={cleanWrapRef}
+              imgSrc={page.cleaned_image_url}
+              imgAlt="Cleaned"
+            >
+              <canvas
+                ref={drawCanvasRef}
+                className={`absolute inset-0 ${cleanMode || penMode ? "cursor-none" : eyeDropperMode ? "cursor-none" : drawingMode || lineCleanMode || bubbleMode ? "cursor-crosshair" : ""}`}
+              />
+            </ImagePanel>
+          </>
+        )}
 
         <RegionPanel
           regions={regions}
@@ -771,10 +976,9 @@ export default function ResultsPage() {
           manga={manga!}
           chapter={chapter!}
           onDataUpdate={setData}
+          compact={readingOpen}
         />
       </div>
-
-      <ReadingOverlay pages={pages} open={readingOpen} onClose={() => setReadingOpen(false)} />
       {runInfoOpen && runInfo && (runInfo.ocr_run || runInfo.translate_run) && (
         <RunInfoModal info={runInfo} onClose={() => setRunInfoOpen(false)} />
       )}

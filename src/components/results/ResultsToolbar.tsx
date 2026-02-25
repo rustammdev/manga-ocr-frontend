@@ -38,7 +38,8 @@ interface ResultsToolbarProps {
   setCurrentPage: (page: number) => void;
   setTranslating: (v: boolean) => void;
   setConfirmTranslate: (v: boolean) => void;
-  setReadingOpen: (v: boolean) => void;
+  readingOpen: boolean;
+  onToggleReading: () => void;
   onTranslateConfirm: () => void;
   onRerunOcr: () => void;
   onExport: () => void;
@@ -60,7 +61,8 @@ export default function ResultsToolbar({
   runInfo,
   setCurrentPage,
   setConfirmTranslate,
-  setReadingOpen,
+  readingOpen,
+  onToggleReading,
   onTranslateConfirm,
   onRerunOcr,
   onExport,
@@ -150,9 +152,9 @@ export default function ResultsToolbar({
       <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setCurrentPage(pagesCount)}>
         Matnlar
       </Button>
-      <Button size="sm" variant="outline" className="h-7 gap-1 text-xs" onClick={() => setReadingOpen(true)}>
+      <Button size="sm" variant={readingOpen ? "default" : "outline"} className="h-7 gap-1 text-xs" onClick={onToggleReading}>
         <BookOpen className="h-3 w-3" />
-        O'qish
+        {readingOpen ? "Tahrirlash" : "O'qish"}
       </Button>
       <Button
         size="sm"

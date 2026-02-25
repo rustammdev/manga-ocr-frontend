@@ -8,6 +8,8 @@ import JobDetailPage from "./pages/JobDetailPage";
 import ProjectPage from "./pages/ProjectPage";
 import ResultsPage from "./pages/ResultsPage";
 import EditorPage from "./pages/EditorPage";
+import CropPreviewPage from "./pages/CropPreviewPage";
+import ReorderPage from "./pages/ReorderPage";
 import NewProjectPage from "./pages/NewProjectPage";
 import NotFoundPage from "./pages/NotFoundPage";
 
@@ -24,6 +26,8 @@ export default function App() {
         <Route path="/project/:manga" element={<ProjectPage />} />
         <Route path="/results/:manga/:chapter" element={<ResultsPage />} />
         <Route path="/edit/:manga/:chapter" element={<EditorPage />} />
+        <Route path="/crop/:manga/:chapter" element={<CropPreviewPage />} />
+        <Route path="/reorder/:manga/:chapter" element={<ReorderPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

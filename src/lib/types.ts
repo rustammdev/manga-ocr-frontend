@@ -12,6 +12,8 @@ export type Chapter = {
   status: ChapterStatus;
   job_id?: string | null;
   automation_score?: number;
+  has_tall_images?: boolean;
+  crop_status?: string | null;
 };
 
 export type ProjectMetadata = {
@@ -82,6 +84,7 @@ export type ProjectSettings = {
   cleaner_backend: CleanerBackendValue;
   translator_model: string;
   limit: number;
+  detect_dark_bubbles: boolean;
 };
 
 export type TranslatorModelInfo = {
@@ -129,9 +132,11 @@ export type Stats = {
 
 export type Region = {
   bbox: { x: number; y: number; w: number; h: number };
+  bubble_bbox?: { x: number; y: number; w: number; h: number };
   original_text?: string;
   uz_text?: string;
   manual?: boolean;
+  is_dark_bubble?: boolean;
   font_size?: number;
   rotation?: number;
   font_weight?: string;
@@ -219,6 +224,27 @@ export type WsMessage =
   | { type: "error"; message: string; progress: number }
   | { type: "cancelled"; message: string; progress: number }
   | { type: "ping"; message: string };
+
+export type CropImageInfo = {
+  filename: string;
+  width: number;
+  height: number;
+  image_url: string;
+  crop_lines: number[];
+};
+
+export type CropPreviewResponse = {
+  images: CropImageInfo[];
+  saved_config: { version: number; images: { filename: string; crop_lines: number[] }[] } | null;
+  has_tall_images: boolean;
+};
+
+export type PageInfo = {
+  filename: string;
+  image_url: string;
+  width: number;
+  height: number;
+};
 
 export type UploadResponse = { manga: string; chapter: string; saved: number };
 export type JobStartResponse = { job_id: string };

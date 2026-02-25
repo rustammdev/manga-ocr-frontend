@@ -15,12 +15,13 @@ export default function ProjectPage() {
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [settings, setSettings] = useState<ProjectSettings>({
-    language: "ja",
-    backend: "openai",
-    ocr_backend: "auto",
-    cleaner_backend: "pcleaner",
+    language: "en",
+    backend: "gemini",
+    ocr_backend: "yolo_florence",
+    cleaner_backend: "lama",
     translator_model: "",
     limit: 0,
+    detect_dark_bubbles: false,
   });
   const [saving, setSaving] = useState(false);
   const [editingSettings, setEditingSettings] = useState(false);
@@ -48,9 +49,10 @@ export default function ProjectPage() {
             language: data.settings.language,
             backend: data.settings.backend,
             ocr_backend: data.settings.ocr_backend,
-            cleaner_backend: data.settings.cleaner_backend || "pcleaner",
+            cleaner_backend: data.settings.cleaner_backend || "lama",
             translator_model: data.settings.translator_model || "",
             limit: data.settings.limit || 0,
+            detect_dark_bubbles: data.settings.detect_dark_bubbles ?? false,
           });
         }
         if (data.metadata) {

@@ -145,7 +145,7 @@ export default function RerunOcrModal({
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Cleaner backend</label>
               <Select
-                value={settings.cleaner_backend ?? "pcleaner"}
+                value={settings.cleaner_backend ?? "lama"}
                 onValueChange={(value) =>
                   setSettings((prev) => ({ ...prev, cleaner_backend: value as ProjectSettings["cleaner_backend"] }))
                 }
@@ -154,8 +154,8 @@ export default function RerunOcrModal({
                   <SelectValue placeholder="Cleaner" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pcleaner">PCleaner (default)</SelectItem>
-                  <SelectItem value="lama">LaMa (best)</SelectItem>
+                  <SelectItem value="pcleaner">PCleaner</SelectItem>
+                  <SelectItem value="lama">LaMa (default)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

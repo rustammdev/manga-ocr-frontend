@@ -68,12 +68,10 @@ export function useOcrMode({ enabled, imgRef, canvasRef, manga, chapter, current
       if (drawCtx) drawCtx.clearRect(0, 0, canvas!.width, canvas!.height);
       if (w < 10 || h < 10) return;
       if (!manga || !chapter) return;
-      const toastId = toast.loading("OCR + tarjima...");
+      const toastId = toast.loading("Matn ajratilmoqda...");
       try {
         const res = await api.ocrBbox(manga, chapter, currentPage, { x, y, w, h });
-        const msg = res.uz_text
-          ? `${res.text?.slice(0, 30)} → ${res.uz_text.slice(0, 40)}`
-          : res.text ? `OCR: "${res.text.slice(0, 60)}"` : "Matn topilmadi";
+        const msg = res.text ? `OCR: "${res.text.slice(0, 60)}"` : "Matn topilmadi";
         toast.success(msg, { id: toastId });
         const updated = await api.getResults(manga, chapter);
         setData(updated);

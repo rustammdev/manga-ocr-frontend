@@ -1,10 +1,12 @@
 import type {
   AutomationInfo,
+  CropPreviewResponse,
   GenreOption,
   JobInfo,
   JobStartResponse,
   MangaAutomation,
   OcrBackendInfo,
+  PageInfo,
   Project,
   ProjectCreateRequest,
   ProjectMetadataUpdate,
@@ -233,5 +235,69 @@ export const api = {
     return fetch(`/api/projects/${encodeURIComponent(manga)}/automation`).then(
       handle<MangaAutomation>
     );
+  },
+  getCropPreview(manga: string, chapter: string): Promise<CropPreviewResponse> {
+    return fetch(
+      `/api/projects/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}/crop-preview`
+    ).then(handle<CropPreviewResponse>);
+  },
+  saveCropConfig(
+    manga: string,
+    chapter: string,
+    images: { filename: string; crop_lines: number[] }[]
+  ): Promise<{ ok: boolean }> {
+    return fetch(
+      `/api/projects/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}/crop-save`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images }),
+      }
+    ).then(handle<{ ok: boolean }>);
+  },
+  getChapterPages(manga: string, chapter: string): Promise<{ images: PageInfo[] }> {
+    return fetch(
+      `/api/projects/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}/pages`
+    ).then(handle<{ images: PageInfo[] }>);
+  },
+  reorderPages(manga: string, chapter: string, order: string[]): Promise<{ ok: boolean; renamed: number }> {
+    return fetch(
+      `/api/projects/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}/reorder`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order }),
+      }
+    ).then(handle<{ ok: boolean; renamed: number }>);
+  },
+  mergeImages(manga: string, chapter: string, filenames: string[]): Promise<{ ok: boolean; merged_into: string; merged_count: number; remaining: number }> {
+    return fetch(
+      `/api/projects/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}/merge-images`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filenames }),
+      }
+    ).then(handle<{ ok: boolean; merged_into: string; merged_count: number; remaining: number }>);
+  },
+  deletePages(manga: string, chapter: string, filenames: string[]): Promise<{ ok: boolean; deleted: number; remaining: number; chapter_deleted: boolean }> {
+    return fetch(
+      `/api/projects/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}/delete-pages`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filenames }),
+      }
+    ).then(handle<{ ok: boolean; deleted: number; remaining: number; chapter_deleted: boolean }>);
+  },
+  mergeChapters(manga: string, source: string, target: string): Promise<{ ok: boolean; target: string; deleted: string; total_images: number }> {
+    return fetch(
+      `/api/projects/${encodeURIComponent(manga)}/merge-chapters`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source, target }),
+      }
+    ).then(handle<{ ok: boolean; target: string; deleted: string; total_images: number }>);
   },
 };

@@ -216,8 +216,17 @@ export function useResizeMode({ anyModeActive, imgRef, canvasRef, manga, chapter
         if (!manga || !chapter) return;
         try {
           await api.updateRegion(manga, chapter, currentPage, rotatingIdx, { rotation: curRotation });
-          const updated = await api.getResults(manga, chapter);
-          setData(updated);
+          // Optimistic update — faqat rotation field yangilash
+          setData((prev) => {
+            if (!prev) return prev;
+            const newPages = [...prev.pages];
+            const page = { ...newPages[currentPage] };
+            const newRegions = [...page.regions];
+            newRegions[rotatingIdx] = { ...newRegions[rotatingIdx], rotation: curRotation };
+            page.regions = newRegions;
+            newPages[currentPage] = page;
+            return { ...prev, pages: newPages };
+          });
         } catch (err) {
           setStatus(`Rotation xatolik: ${(err as Error).message}`);
         }
@@ -234,9 +243,20 @@ export function useResizeMode({ anyModeActive, imgRef, canvasRef, manga, chapter
       ) return;
       if (!manga || !chapter) return;
       try {
-        await api.updateRegion(manga, chapter, currentPage, hoveredIdx, { bbox: curBbox });
-        const updated = await api.getResults(manga, chapter);
-        setData(updated);
+        const resizedIdx = hoveredIdx;
+        await api.updateRegion(manga, chapter, currentPage, resizedIdx, { bbox: curBbox });
+        // Optimistic update — faqat bbox field yangilash
+        const newBbox = { ...curBbox };
+        setData((prev) => {
+          if (!prev) return prev;
+          const newPages = [...prev.pages];
+          const page = { ...newPages[currentPage] };
+          const newRegions = [...page.regions];
+          newRegions[resizedIdx] = { ...newRegions[resizedIdx], bbox: newBbox };
+          page.regions = newRegions;
+          newPages[currentPage] = page;
+          return { ...prev, pages: newPages };
+        });
       } catch (err) {
         setStatus(`Resize xatolik: ${(err as Error).message}`);
       }

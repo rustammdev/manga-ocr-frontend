@@ -44,6 +44,40 @@ function buildFontString(
   return `${style} ${weight} ${fontSize}px '${fontFamily}', 'Comic Neue', sans-serif`;
 }
 
+/**
+ * OCR bbox asosida rendering box hisoblaydi.
+ * Agar bubble_bbox bor va OCR box ancha kichik bo'lsa,
+ * OCR box ni bubble yo'nalishida biroz kattalashtiradi.
+ */
+function computeRenderBox(
+  bbox: { x: number; y: number; w: number; h: number },
+  bubbleBbox?: { x: number; y: number; w: number; h: number },
+): { x: number; y: number; w: number; h: number } {
+  if (!bubbleBbox) return bbox;
+
+  const areaRatio = (bbox.w * bbox.h) / Math.max(1, bubbleBbox.w * bubbleBbox.h);
+
+  // OCR box bubble ning 40% dan kam bo'lsa — biroz kattalashtirish
+  if (areaRatio >= 0.4) return bbox;
+
+  const expandFactor = 0.3;
+  const dw = (bubbleBbox.w - bbox.w) * expandFactor;
+  const dh = (bubbleBbox.h - bbox.h) * expandFactor;
+
+  let x = Math.round(bbox.x - dw / 2);
+  let y = Math.round(bbox.y - dh / 2);
+  let w = Math.round(bbox.w + dw);
+  let h = Math.round(bbox.h + dh);
+
+  // bubble chegarasidan chiqmasin
+  x = Math.max(bubbleBbox.x, x);
+  y = Math.max(bubbleBbox.y, y);
+  w = Math.min(bubbleBbox.x + bubbleBbox.w - x, w);
+  h = Math.min(bubbleBbox.y + bubbleBbox.h - y, h);
+
+  return { x, y, w, h };
+}
+
 export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Region[]) {
   ctx.textBaseline = "top";
   ctx.textAlign = "center";
@@ -53,9 +87,11 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
     const text = r.uz_text.toUpperCase().trim();
     if (!text) return;
 
-    const padding = 6;
-    const boxWidth = Math.max(10, r.bbox.w);
-    const boxHeight = Math.max(10, r.bbox.h);
+    // OCR bbox asosiy rendering box, zarur bo'lsa biroz kattalashtiriladi
+    const box = computeRenderBox(r.bbox, r.bubble_bbox);
+    const padding = 4;
+    const boxWidth = Math.max(10, box.w);
+    const boxHeight = Math.max(10, box.h);
     const maxWidth = Math.max(10, boxWidth - padding * 2);
     const maxHeight = Math.max(10, boxHeight - padding * 2);
 
@@ -63,44 +99,48 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
     const fontStyle = r.font_style || "normal";
     const fontFamily = r.font_family || "Comic Neue";
 
+    // So'z soniga qarab max font chegarasi
+    const wordCount = text.split(/\s+/).length;
+    const maxFontByWords = wordCount <= 2 ? 48 : wordCount === 3 ? 42 : 36;
+    const MIN_FONT = 20;
+
     let fontSize: number;
     if (r.font_size) {
       fontSize = r.font_size;
     } else {
-      fontSize = Math.floor(Math.min(32, Math.max(12, boxHeight * 0.55)));
+      fontSize = Math.floor(Math.min(maxFontByWords, Math.max(MIN_FONT, boxHeight * 0.45)));
     }
     ctx.font = buildFontString(fontStyle, fontWeight, fontSize, fontFamily);
     let lines = wrapText(ctx, text, maxWidth);
     let lineHeight = Math.floor(fontSize * 1.2);
 
-    if (!r.font_size) {
-      while (fontSize > 10 && lines.length * lineHeight > maxHeight) {
-        fontSize -= 1;
-        lineHeight = Math.floor(fontSize * 1.2);
-        ctx.font = buildFontString(fontStyle, fontWeight, fontSize, fontFamily);
-        lines = wrapText(ctx, text, maxWidth);
-      }
+    // Matn sig'maguncha font kichraytiriladi, lekin 20px dan pastga tushmaydi
+    while (fontSize > MIN_FONT && lines.length * lineHeight > maxHeight) {
+      fontSize -= 1;
+      lineHeight = Math.floor(fontSize * 1.2);
+      ctx.font = buildFontString(fontStyle, fontWeight, fontSize, fontFamily);
+      lines = wrapText(ctx, text, maxWidth);
     }
 
     const totalTextHeight = lines.length * lineHeight;
-    const startY = r.bbox.y + padding + Math.max(0, (maxHeight - totalTextHeight) / 2);
+    const startY = box.y + padding + Math.max(0, (maxHeight - totalTextHeight) / 2);
 
     ctx.save();
     const rot = r.rotation || 0;
     if (rot) {
-      const cx = r.bbox.x + boxWidth / 2;
-      const cy = r.bbox.y + boxHeight / 2;
+      const cx = box.x + boxWidth / 2;
+      const cy = box.y + boxHeight / 2;
       ctx.translate(cx, cy);
       ctx.rotate(rot * Math.PI / 180);
       ctx.translate(-cx, -cy);
     }
     ctx.beginPath();
-    ctx.rect(r.bbox.x, r.bbox.y, boxWidth, boxHeight);
+    ctx.rect(box.x, box.y, boxWidth, boxHeight);
     ctx.clip();
     const fontColor = r.font_color || "#111827";
     const strokeColor = r.font_stroke_color || "";
     const strokeWidth = r.font_stroke_width || 0;
-    const centerX = r.bbox.x + boxWidth / 2;
+    const centerX = box.x + boxWidth / 2;
 
     // Stroke (hoshiya) — matn chekkasi
     if (strokeColor && strokeWidth > 0) {

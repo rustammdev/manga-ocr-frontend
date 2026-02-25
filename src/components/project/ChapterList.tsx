@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Play, Eye, Pencil, Loader2, Trash2 } from "lucide-react";
+import { Play, Eye, Pencil, Loader2, Trash2, Scissors, ArrowUpDown } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "../../lib/api";
@@ -152,23 +152,49 @@ export default function ChapterList({
                           </Button>
                         </Link>
                       )}
-                    {(chapter.status === "uploaded" || chapter.status === "failed") && (
-                      <Button
-                        size="sm"
-                        className="h-8 gap-1 text-xs"
-                        disabled={startingChapter === chapter.name}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStartJob(chapter);
-                        }}
-                      >
-                        {startingChapter === chapter.name ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Play className="h-3.5 w-3.5" />
-                        )}
-                        OCR
+                    <Link
+                      to={`/reorder/${projectName}/${chapter.name}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Button size="sm" variant="ghost" className="h-8 gap-1 text-xs">
+                        <ArrowUpDown className="h-3.5 w-3.5" />
+                        Tartib
                       </Button>
+                    </Link>
+                    {(chapter.status === "uploaded" || chapter.status === "failed") && (
+                      <>
+                        {chapter.has_tall_images && (
+                          <Link
+                            to={`/crop/${projectName}/${chapter.name}`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Button
+                              size="sm"
+                              variant={chapter.crop_status === "done" ? "ghost" : "outline"}
+                              className="h-8 gap-1 text-xs"
+                            >
+                              <Scissors className="h-3.5 w-3.5" />
+                              Qirqish
+                            </Button>
+                          </Link>
+                        )}
+                        <Button
+                          size="sm"
+                          className="h-8 gap-1 text-xs"
+                          disabled={startingChapter === chapter.name}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartJob(chapter);
+                          }}
+                        >
+                          {startingChapter === chapter.name ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Play className="h-3.5 w-3.5" />
+                          )}
+                          OCR
+                        </Button>
+                      </>
                     )}
                     <Button
                       size="sm"

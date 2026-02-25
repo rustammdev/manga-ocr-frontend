@@ -137,7 +137,7 @@ export default function SettingsModal({
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Cleaner backend</label>
               <Select
-                value={settings.cleaner_backend ?? "pcleaner"}
+                value={settings.cleaner_backend ?? "lama"}
                 onValueChange={(value) =>
                   setSettings((prev) => ({ ...prev, cleaner_backend: value as ProjectSettings["cleaner_backend"] }))
                 }
@@ -146,8 +146,8 @@ export default function SettingsModal({
                   <SelectValue placeholder="Cleaner" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pcleaner">PCleaner (default)</SelectItem>
-                  <SelectItem value="lama">LaMa (best)</SelectItem>
+                  <SelectItem value="pcleaner">PCleaner</SelectItem>
+                  <SelectItem value="lama">LaMa (default)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -166,6 +166,17 @@ export default function SettingsModal({
               />
             </div>
           </div>
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={settings.detect_dark_bubbles ?? false}
+              onChange={(e) =>
+                setSettings((prev) => ({ ...prev, detect_dark_bubbles: e.target.checked }))
+              }
+              className="rounded border-gray-300"
+            />
+            <span className="text-muted-foreground">Qora bubble aniqlash (dark bubble detection)</span>
+          </label>
         </div>
         <div className="flex items-center justify-end gap-2 border-t px-5 py-3">
           <Button variant="ghost" size="sm" onClick={onClose}>
