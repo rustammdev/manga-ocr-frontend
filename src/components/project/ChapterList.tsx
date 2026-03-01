@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Play, Eye, Pencil, Loader2, Trash2, Scissors, ArrowUpDown, CheckCircle2, Circle, Upload, CloudUpload } from "lucide-react";
+import { Play, Eye, Pencil, Loader2, Trash2, Scissors, ArrowUpDown, CheckCircle2, Circle, Upload, CloudUpload, CloudOff, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "../../lib/api";
@@ -36,6 +36,7 @@ interface ChapterListProps {
   publishingTarget: "manga" | string | null;
   onProjectUpdate: (project: Project) => void;
   onPublishChapter: (chapter: string) => void;
+  onSetThumbnail: (chapter: string) => void;
 }
 
 export default function ChapterList({
@@ -48,9 +49,12 @@ export default function ChapterList({
   publishingTarget,
   onProjectUpdate,
   onPublishChapter,
+  onSetThumbnail,
 }: ChapterListProps) {
   const navigate = useNavigate();
   const [startingChapter, setStartingChapter] = useState<string | null>(null);
+  const [selectedPublished, setSelectedPublished] = useState<Set<string>>(new Set());
+  const [unpublishing, setUnpublishing] = useState(false);
 
   async function handleStartJob(chapter: Chapter) {
     setStartingChapter(chapter.name);
@@ -76,12 +80,79 @@ export default function ChapterList({
     }
   }
 
+  function toggleSelect(chapterName: string) {
+    setSelectedPublished((prev) => {
+      const next = new Set(prev);
+      if (next.has(chapterName)) {
+        next.delete(chapterName);
+      } else {
+        next.add(chapterName);
+      }
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedPublished.size === publishedChapters.length) {
+      setSelectedPublished(new Set());
+    } else {
+      setSelectedPublished(new Set(publishedChapters));
+    }
+  }
+
+  async function handleUnpublish() {
+    const selected = Array.from(selectedPublished);
+    if (!selected.length) return;
+    if (!confirm(`${selected.length} bob unpublish qilinadi. CDN dan o'chiriladi. Davom etsinmi?`)) return;
+    setUnpublishing(true);
+    try {
+      const res = await api.unpublishChapters(projectName, selected);
+      toast.success(res.message);
+      setSelectedPublished(new Set());
+      const updated = await api.getProject(projectName);
+      onProjectUpdate(updated);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setUnpublishing(false);
+    }
+  }
+
+  const hasPublished = publishedChapters.length > 0;
+
   return (
     <div className="min-w-0 xl:flex-1">
       <div className="rounded-lg border bg-card">
         <div className="flex items-center justify-between border-b px-5 py-3">
-          <span className="text-sm font-medium">Chapterlar</span>
-          <span className="text-xs text-muted-foreground">{chapters.length} ta</span>
+          <div className="flex items-center gap-3">
+            {hasPublished && (
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 rounded border-muted-foreground/40 accent-orange-500 cursor-pointer"
+                checked={selectedPublished.size === publishedChapters.length && publishedChapters.length > 0}
+                onChange={toggleSelectAll}
+                title="Barchasini tanlash"
+              />
+            )}
+            <span className="text-sm font-medium">Chapterlar</span>
+            <span className="text-xs text-muted-foreground">{chapters.length} ta</span>
+          </div>
+          {selectedPublished.size > 0 ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={unpublishing}
+              onClick={handleUnpublish}
+              className="h-7 gap-1.5 text-xs text-orange-500 hover:text-orange-600 border-orange-300"
+            >
+              {unpublishing ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <CloudOff className="h-3 w-3" />
+              )}
+              Unpublish ({selectedPublished.size})
+            </Button>
+          ) : null}
         </div>
 
         {chapters.length === 0 ? (
@@ -95,6 +166,7 @@ export default function ChapterList({
           <div className="divide-y">
             {chapters.map((chapter) => {
               const isClickable = chapter.status === "done" || chapter.status === "ocr_done";
+              const isPublished = publishedChapters.includes(chapter.name);
               return (
                 <div
                   key={chapter.name}
@@ -107,32 +179,66 @@ export default function ChapterList({
                   }}
                 >
                   <div className="flex items-center gap-4">
+                    {isPublished ? (
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 flex-shrink-0 rounded border-muted-foreground/40 accent-orange-500 cursor-pointer"
+                        checked={selectedPublished.has(chapter.name)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleSelect(chapter.name);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <button
+                        className="flex-shrink-0 transition-colors"
+                        title={chapter.is_validated ? "Tekshirilgan" : "Tekshirilmagan"}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const newVal = !chapter.is_validated;
+                          // Optimistic update
+                          const updatedChapters = chapters.map((ch) =>
+                            ch.name === chapter.name ? { ...ch, is_validated: newVal } : ch
+                          );
+                          onProjectUpdate({
+                            ...({ slug: projectName, display_name: projectName, chapters: updatedChapters, chapter_count: updatedChapters.length } as Project),
+                          });
+                          try {
+                            await api.updateChapterValidated(projectName, chapter.name, newVal);
+                          } catch (err) {
+                            toast.error((err as Error).message);
+                            const reverted = await api.getProject(projectName);
+                            onProjectUpdate(reverted);
+                          }
+                        }}
+                      >
+                        {chapter.is_validated ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                        ) : (
+                          <Circle className="h-4 w-4 text-muted-foreground/40 hover:text-muted-foreground" />
+                        )}
+                      </button>
+                    )}
+                    {/* Thumbnail */}
                     <button
-                      className="flex-shrink-0 transition-colors"
-                      title={chapter.is_validated ? "Tekshirilgan" : "Tekshirilmagan"}
-                      onClick={async (e) => {
+                      className="flex-shrink-0 rounded overflow-hidden border border-muted-foreground/20 hover:border-primary/50 transition-colors"
+                      title="Thumbnail o'rnatish"
+                      onClick={(e) => {
                         e.stopPropagation();
-                        const newVal = !chapter.is_validated;
-                        // Optimistic update
-                        const updatedChapters = chapters.map((ch) =>
-                          ch.name === chapter.name ? { ...ch, is_validated: newVal } : ch
-                        );
-                        onProjectUpdate({
-                          ...({ slug: projectName, display_name: projectName, chapters: updatedChapters, chapter_count: updatedChapters.length } as Project),
-                        });
-                        try {
-                          await api.updateChapterValidated(projectName, chapter.name, newVal);
-                        } catch (err) {
-                          toast.error((err as Error).message);
-                          const reverted = await api.getProject(projectName);
-                          onProjectUpdate(reverted);
-                        }
+                        onSetThumbnail(chapter.name);
                       }}
                     >
-                      {chapter.is_validated ? (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      {chapter.thumbnail_url ? (
+                        <img
+                          src={chapter.thumbnail_url}
+                          alt=""
+                          className="h-[62px] w-[105px] object-cover"
+                        />
                       ) : (
-                        <Circle className="h-4 w-4 text-muted-foreground/40 hover:text-muted-foreground" />
+                        <div className="flex h-[62px] w-[105px] items-center justify-center bg-muted/50">
+                          <ImageIcon className="h-4 w-4 text-muted-foreground/40" />
+                        </div>
                       )}
                     </button>
                     <div>
@@ -142,7 +248,7 @@ export default function ChapterList({
                     <Badge variant={statusVariant[chapter.status] || "info"}>
                       {statusLabel[chapter.status] || chapter.status}
                     </Badge>
-                    {publishedChapters.includes(chapter.name) && (
+                    {isPublished && (
                       <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-sky-400" title="Published">
                         <CloudUpload className="h-3 w-3" />
                       </span>
@@ -183,7 +289,7 @@ export default function ChapterList({
                             Tahrir
                           </Button>
                         </Link>
-                        {chapter.status === "done" && chapter.is_validated && !publishedChapters.includes(chapter.name) && (
+                        {chapter.status === "done" && chapter.is_validated && !isPublished && (
                           <Button
                             size="sm"
                             variant="ghost"

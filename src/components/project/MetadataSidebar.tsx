@@ -1,4 +1,4 @@
-import { FileText, Pencil, Settings2 } from "lucide-react";
+import { FileText, ImageIcon, Pencil, Settings2, Trash2 } from "lucide-react";
 
 import type { GenreOption, Project } from "../../lib/types";
 import { Button } from "../ui/button";
@@ -12,6 +12,8 @@ interface MetadataSidebarProps {
   allGenres: GenreOption[];
   onEditMeta: () => void;
   onEditSettings: () => void;
+  onEditCover: () => void;
+  onDeleteCover: () => void;
 }
 
 export default function MetadataSidebar({
@@ -19,9 +21,44 @@ export default function MetadataSidebar({
   allGenres,
   onEditMeta,
   onEditSettings,
+  onEditCover,
+  onDeleteCover,
 }: MetadataSidebarProps) {
+  const coverUrl = project.metadata?.cover_url;
   return (
     <div className="w-full shrink-0 xl:w-[420px]">
+      {/* Cover */}
+      <div className="mb-4 group relative">
+        {coverUrl ? (
+          <div className="flex justify-center">
+            <div className="relative w-[210px] h-[350px] rounded-lg overflow-hidden border">
+              <img
+                src={coverUrl}
+                alt="Cover"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button size="sm" variant="secondary" className="h-7 gap-1 text-xs" onClick={onEditCover}>
+                  <Pencil className="h-3 w-3" />
+                  O'zgartirish
+                </Button>
+                <Button size="sm" variant="destructive" className="h-7 gap-1 text-xs" onClick={onDeleteCover}>
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <button
+            className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/20 py-8 text-sm text-muted-foreground/60 hover:border-primary/40 hover:text-muted-foreground transition-colors"
+            onClick={onEditCover}
+          >
+            <ImageIcon className="h-5 w-5" />
+            Muqova qo'shish
+          </button>
+        )}
+      </div>
+
       <div className="rounded-lg border bg-card">
         <div className="flex items-center justify-between border-b px-5 py-3">
           <div className="flex items-center gap-2">

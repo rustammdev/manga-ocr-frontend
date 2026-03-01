@@ -112,8 +112,12 @@ const RegionItem = memo(function RegionItem({
               className="rounded px-1.5 py-0.5 text-[10px] font-medium text-destructive transition-colors hover:bg-destructive/15"
               onClick={async () => {
                 setConfirmingDelete(null);
-                await api.deleteRegion(manga, chapter, currentPage, i);
+                const delRes = await api.deleteRegion(manga, chapter, currentPage, i) as { image_url?: string };
                 const updated = await api.getResults(manga, chapter);
+                // Backend qaytargan image_url bilan clean rasmni yangilash
+                if (delRes.image_url && updated.pages[currentPage]) {
+                  updated.pages[currentPage].cleaned_image_url = delRes.image_url;
+                }
                 setRegionDrafts((prev) => {
                   const next: Record<string, RegionDraft> = {};
                   const page = updated.pages[currentPage];

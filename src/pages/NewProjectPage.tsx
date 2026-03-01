@@ -52,10 +52,6 @@ export default function NewProjectPage() {
       setError("Manga nomini kiriting");
       return;
     }
-    if (tags.length < 3) {
-      setError("Kamida 3 ta janr tanlang");
-      return;
-    }
     setSaving(true);
     setError("");
     try {
@@ -144,9 +140,7 @@ export default function NewProjectPage() {
 
         {/* Genres */}
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">
-            Janrlar <span className="text-red-400">*</span>
-          </label>
+          <label className="text-sm font-medium">Janrlar</label>
           <GenrePicker value={tags} onChange={setTags} />
         </div>
 

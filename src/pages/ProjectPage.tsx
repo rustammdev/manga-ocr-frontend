@@ -10,6 +10,8 @@ import ChapterList from "../components/project/ChapterList";
 import MetadataSidebar from "../components/project/MetadataSidebar";
 import EditMetadataModal from "../components/project/EditMetadataModal";
 import SettingsModal from "../components/project/SettingsModal";
+import CoverCropModal from "../components/project/CoverCropModal";
+import ChapterThumbnailModal from "../components/project/ChapterThumbnailModal";
 import { Progress } from "../components/ui/progress";
 
 export default function ProjectPage() {
@@ -144,6 +146,10 @@ export default function ProjectPage() {
 
   const [forceOcr, setForceOcr] = useState(false);
   const [forceClean, setForceClean] = useState(false);
+
+  // Thumbnail modal state
+  const [coverModalOpen, setCoverModalOpen] = useState(false);
+  const [thumbnailModalChapter, setThumbnailModalChapter] = useState<string | null>(null);
 
   const [translatingManga, setTranslatingManga] = useState(false);
 
@@ -290,6 +296,7 @@ export default function ProjectPage() {
           publishingTarget={publishingTarget}
           onProjectUpdate={setProject}
           onPublishChapter={handlePublishChapter}
+          onSetThumbnail={(ch) => setThumbnailModalChapter(ch)}
         />
 
         {project && (
@@ -301,6 +308,18 @@ export default function ProjectPage() {
               setEditingMeta(true);
             }}
             onEditSettings={() => setEditingSettings(true)}
+            onEditCover={() => setCoverModalOpen(true)}
+            onDeleteCover={async () => {
+              if (!manga) return;
+              if (!confirm("Muqovani o'chirmoqchimisiz?")) return;
+              try {
+                await api.deleteCover(manga);
+                const updated = await api.getProject(manga);
+                setProject(updated);
+              } catch (e) {
+                toast.error((e as Error).message);
+              }
+            }}
           />
         )}
       </div>
@@ -334,6 +353,32 @@ export default function ProjectPage() {
           setForceClean(false);
         }}
       />
+
+      {project && (
+        <CoverCropModal
+          open={coverModalOpen}
+          manga={manga!}
+          chapters={chapters}
+          onClose={() => setCoverModalOpen(false)}
+          onSaved={() => {
+            setCoverModalOpen(false);
+            if (manga) api.getProject(manga).then(setProject).catch(() => {});
+          }}
+        />
+      )}
+
+      {thumbnailModalChapter && (
+        <ChapterThumbnailModal
+          open={!!thumbnailModalChapter}
+          manga={manga!}
+          chapter={thumbnailModalChapter}
+          onClose={() => setThumbnailModalChapter(null)}
+          onSaved={() => {
+            setThumbnailModalChapter(null);
+            if (manga) api.getProject(manga).then(setProject).catch(() => {});
+          }}
+        />
+      )}
     </div>
   );
 }

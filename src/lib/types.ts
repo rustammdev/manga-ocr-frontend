@@ -15,6 +15,7 @@ export type Chapter = {
   has_tall_images?: boolean;
   crop_status?: string | null;
   is_validated?: boolean;
+  thumbnail_url?: string;
 };
 
 export type ProjectMetadata = {
@@ -25,6 +26,7 @@ export type ProjectMetadata = {
   title_ja: string;
   title_ko: string;
   tags: string[];
+  cover_url?: string;
 };
 
 export type Project = {

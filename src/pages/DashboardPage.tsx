@@ -47,7 +47,7 @@ export default function DashboardPage() {
       </div>
 
       <StatsCards stats={stats} />
-      <FolderView projects={projects} error={error} onProjectsChange={setProjects} />
+      <FolderView projects={projects} error={error} />
     </div>
   );
 }

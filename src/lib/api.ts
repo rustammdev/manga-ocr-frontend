@@ -302,6 +302,22 @@ export const api = {
       }
     ).then(handle<{ ok: boolean; target: string; deleted: string; total_images: number }>);
   },
+  splitImage(manga: string, chapter: string, filename: string, cutLines: number[]): Promise<{ ok: boolean; split: boolean; parts?: number; remaining?: number }> {
+    return fetch(
+      `/api/projects/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}/split-image`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename, cut_lines: cutLines }),
+      }
+    ).then(handle<{ ok: boolean; split: boolean; parts?: number; remaining?: number }>);
+  },
+  autoMerge(manga: string, chapter: string): Promise<{ ok: boolean; merge_groups: number; total_merged: number; remaining: number }> {
+    return fetch(
+      `/api/projects/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}/auto-merge`,
+      { method: "POST" }
+    ).then(handle<{ ok: boolean; merge_groups: number; total_merged: number; remaining: number }>);
+  },
   updateProjectFolder(slug: string, folder: string): Promise<{ slug: string; folder: string }> {
     return fetch(`/api/projects/${encodeURIComponent(slug)}/folder`, {
       method: "PUT",
@@ -340,5 +356,52 @@ export const api = {
     return fetch(`/api/publish/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}`, {
       method: "POST",
     }).then(handle<PublishStartResponse>);
+  },
+  republishPage(manga: string, chapter: string, pageIdx: number): Promise<{ message: string; page_idx: number; r2_key: string; url: string }> {
+    return fetch(`/api/publish/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}/page/${pageIdx}`, {
+      method: "POST",
+    }).then(handle<{ message: string; page_idx: number; r2_key: string; url: string }>);
+  },
+  unpublishChapters(manga: string, chapters: string[]): Promise<{ message: string; chapters: string[]; deleted_files: number }> {
+    return fetch(`/api/unpublish/${encodeURIComponent(manga)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chapters }),
+    }).then(handle<{ message: string; chapters: string[]; deleted_files: number }>);
+  },
+
+  // ── Thumbnails ──────────────────────────────────────────────────────
+
+  setCoverFromPage(manga: string, chapter: string, pageIdx: number, crop: { x: number; y: number; w: number; h: number }): Promise<{ ok: boolean; cover_url: string }> {
+    return fetch(`/api/projects/${encodeURIComponent(manga)}/cover`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chapter, page_idx: pageIdx, ...crop }),
+    }).then(handle<{ ok: boolean; cover_url: string }>);
+  },
+  uploadCover(manga: string, file: File): Promise<{ ok: boolean; cover_url: string }> {
+    const form = new FormData();
+    form.append("file", file);
+    return fetch(`/api/projects/${encodeURIComponent(manga)}/cover/upload`, {
+      method: "POST",
+      body: form,
+    }).then(handle<{ ok: boolean; cover_url: string }>);
+  },
+  deleteCover(manga: string): Promise<{ ok: boolean }> {
+    return fetch(`/api/projects/${encodeURIComponent(manga)}/cover`, {
+      method: "DELETE",
+    }).then(handle<{ ok: boolean }>);
+  },
+  setChapterThumbnail(manga: string, chapter: string, pageIdx: number, crop: { x: number; y: number; w: number; h: number }): Promise<{ ok: boolean; thumbnail_url: string }> {
+    return fetch(`/api/projects/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}/thumbnail`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ page_idx: pageIdx, ...crop }),
+    }).then(handle<{ ok: boolean; thumbnail_url: string }>);
+  },
+  deleteChapterThumbnail(manga: string, chapter: string): Promise<{ ok: boolean }> {
+    return fetch(`/api/projects/${encodeURIComponent(manga)}/${encodeURIComponent(chapter)}/thumbnail`, {
+      method: "DELETE",
+    }).then(handle<{ ok: boolean }>);
   },
 };

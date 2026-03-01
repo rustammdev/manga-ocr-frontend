@@ -79,12 +79,15 @@ export type JobFinishInfo = {
 /**
  * Active chapterlarning job_id lariga WebSocket ulanib,
  * job tugaganda (done/error/cancelled) callback chaqiradi.
+ *
+ * Tugagan job_id lar eslab qolinadi — qayta ulanilmaydi.
  */
 export function useActiveJobsWatcher(
   chapters: Chapter[],
   onJobFinished: (info: JobFinishInfo) => void,
 ) {
   const connectionsRef = useRef<Map<string, WebSocket>>(new Map());
+  const finishedRef = useRef<Set<string>>(new Set());
   const onJobFinishedRef = useRef(onJobFinished);
   onJobFinishedRef.current = onJobFinished;
 
@@ -100,6 +103,7 @@ export function useActiveJobsWatcher(
     }
 
     const current = connectionsRef.current;
+    const finished = finishedRef.current;
 
     // Endi kerak bo'lmagan ulanishlarni yopish
     for (const [jobId, ws] of current) {
@@ -112,7 +116,7 @@ export function useActiveJobsWatcher(
     // Yangi joblar uchun WS ochish
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
     for (const [jobId, { name, status }] of activeJobs) {
-      if (current.has(jobId)) continue; // Allaqachon ulangan
+      if (current.has(jobId) || finished.has(jobId)) continue;
 
       const ws = new WebSocket(`${proto}//${location.host}/ws/jobs/${jobId}`);
 
@@ -120,6 +124,7 @@ export function useActiveJobsWatcher(
         try {
           const data = JSON.parse(event.data) as WsMessage;
           if (data.type === "done" || data.type === "error" || data.type === "cancelled") {
+            finished.add(jobId);
             onJobFinishedRef.current({
               chapterName: name,
               oldStatus: status,
@@ -139,12 +144,17 @@ export function useActiveJobsWatcher(
       current.set(jobId, ws);
     }
 
+    // Unmount da barcha ulanishlarni yopish (finished set saqlanadi)
+  }, [chapters]);
+
+  // Component unmount da tozalash
+  useEffect(() => {
     return () => {
-      // Component unmount da barcha ulanishlarni yopish
-      for (const ws of current.values()) {
+      for (const ws of connectionsRef.current.values()) {
         ws.close();
       }
-      current.clear();
+      connectionsRef.current.clear();
+      finishedRef.current.clear();
     };
-  }, [chapters]);
+  }, []);
 }

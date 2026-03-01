@@ -697,6 +697,17 @@ export default function ResultsPage() {
   }, [manga, chapter, executeRerunOcr]);
 
   const [exporting, setExporting] = useState(false);
+  const [republishing, setRepublishing] = useState(false);
+  const [isPublished, setIsPublished] = useState(false);
+
+  // Chapter publish statusini tekshirish
+  useEffect(() => {
+    if (!manga || !chapter) return;
+    api.getProject(manga).then((proj) => {
+      const published = proj.published_chapters || [];
+      setIsPublished(published.includes(chapter));
+    }).catch(() => {});
+  }, [manga, chapter]);
 
   const handleExport = useCallback(async () => {
     if (!data || !manga || !chapter) return;
@@ -768,6 +779,20 @@ export default function ResultsPage() {
     }
   }, [data, manga, chapter, currentPage]);
 
+  const handleRepublishPage = useCallback(async () => {
+    if (!manga || !chapter) return;
+    setRepublishing(true);
+    try {
+      const res = await api.republishPage(manga, chapter, currentPage);
+      toast.success(res.message);
+    } catch (e) {
+      const err = e as Error;
+      toast.error(`Yuklash xatolik: ${err.message}`);
+    } finally {
+      setRepublishing(false);
+    }
+  }, [manga, chapter, currentPage]);
+
   const handleTranslateConfirm = useCallback(async () => {
     if (!manga || !chapter) return;
     setConfirmTranslate(false);
@@ -831,8 +856,11 @@ export default function ResultsPage() {
         onExport={handleExport}
         onExportPage={handleExportCurrentPage}
         onRunInfoOpen={() => setRunInfoOpen(true)}
+        onRepublishPage={handleRepublishPage}
         exporting={exporting}
         rerunLoading={rerunLoading}
+        republishing={republishing}
+        isPublished={isPublished}
         pagesCount={pages.length}
       />
 

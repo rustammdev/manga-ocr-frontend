@@ -10,6 +10,7 @@ import {
   Languages,
   BookOpen,
   RotateCcw,
+  Upload,
 } from "lucide-react";
 
 import type { ResultsData, RunInfo } from "../../lib/types";
@@ -45,8 +46,11 @@ interface ResultsToolbarProps {
   onExport: () => void;
   onExportPage: () => void;
   onRunInfoOpen: () => void;
+  onRepublishPage: () => void;
   exporting: boolean;
   rerunLoading: boolean;
+  republishing: boolean;
+  isPublished: boolean;
   pagesCount: number;
 }
 
@@ -68,8 +72,11 @@ export default function ResultsToolbar({
   onExport,
   onExportPage,
   onRunInfoOpen,
+  onRepublishPage,
   exporting,
   rerunLoading,
+  republishing,
+  isPublished,
   pagesCount,
 }: ResultsToolbarProps) {
   const costText = formatCost(data);
@@ -178,6 +185,19 @@ export default function ResultsToolbar({
         {exporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
         Hammasi
       </Button>
+      {isPublished && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1 text-xs border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+          disabled={republishing}
+          onClick={onRepublishPage}
+          title="Joriy sahifani CDN ga qayta yuklash"
+        >
+          {republishing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+          CDN
+        </Button>
+      )}
       <Link to={`/edit/${manga}/${chapter}`}>
         <Button variant="outline" size="sm" className="h-7 gap-1 text-xs">
           <Pencil className="h-3 w-3" />

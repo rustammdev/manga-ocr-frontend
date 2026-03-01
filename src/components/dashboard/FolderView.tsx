@@ -1,42 +1,63 @@
-import { useState, useMemo, useEffect } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  DndContext,
-  DragOverlay,
-  useDraggable,
-  useDroppable,
-  type DragEndEvent,
-  type DragStartEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  FolderPlus,
-  FolderOpen,
-  ChevronDown,
-  ChevronRight,
-  Trash2,
-  ArrowRight,
   BookOpen,
-  GripVertical,
+  ArrowRight,
+  Upload,
+  ScanText,
+  Languages,
+  Send,
+  CheckCircle2,
 } from "lucide-react";
-import { toast } from "sonner";
 
-import { api } from "../../lib/api";
-import type { Folder, Project } from "../../lib/types";
+import type { Project } from "../../lib/types";
 import { Badge } from "../ui/badge";
-import { Button } from "../ui/button";
-import { Input } from "../ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "../ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
 
 // --- helpers ---
+
+type ProjectStage = "uploaded" | "ocr" | "translate" | "publish" | "done";
+
+function getProjectStage(project: Project): ProjectStage {
+  const statuses = project.chapters.map((ch) => ch.status);
+  if (statuses.length === 0) return "uploaded";
+
+  const allDone = statuses.every((s) => s === "done");
+  if (allDone) {
+    return project.published_at ? "done" : "publish";
+  }
+
+  // All chapters past OCR (ocr_done / translating / done)
+  const allPastOcr = statuses.every(
+    (s) => s === "ocr_done" || s === "translating" || s === "done"
+  );
+  if (allPastOcr) return "translate";
+
+  // At least one chapter started or completed OCR
+  const hasOcrActivity = statuses.some(
+    (s) =>
+      s === "processing" ||
+      s === "ocr_done" ||
+      s === "translating" ||
+      s === "done"
+  );
+  if (hasOcrActivity) return "ocr";
+
+  return "uploaded";
+}
+
+const stageTabs: {
+  id: ProjectStage | "all";
+  label: string;
+  icon: typeof BookOpen;
+}[] = [
+  { id: "all", label: "Barchasi", icon: BookOpen },
+  { id: "uploaded", label: "Yuklangan", icon: Upload },
+  { id: "ocr", label: "OCR & Tozalash", icon: ScanText },
+  { id: "translate", label: "Tarjima", icon: Languages },
+  { id: "publish", label: "Nashr", icon: Send },
+  { id: "done", label: "Tayyor", icon: CheckCircle2 },
+];
 
 function statusForProject(project: Project) {
   const statuses = project.chapters.map((ch) => ch.status);
@@ -44,11 +65,18 @@ function statusForProject(project: Project) {
   const hasDone = statuses.includes("done");
   const hasProcessing =
     statuses.includes("processing") || statuses.includes("translating");
-  const mainStatus = hasProcessing ? "processing" : hasDone ? "done" : "uploaded";
+  const mainStatus = hasProcessing
+    ? "processing"
+    : hasDone
+      ? "done"
+      : "uploaded";
   return { doneCount, mainStatus };
 }
 
-const statusVariant: Record<string, "success" | "info" | "warning" | "danger"> = {
+const statusVariant: Record<
+  string,
+  "success" | "info" | "warning" | "danger"
+> = {
   done: "success",
   processing: "warning",
   translating: "warning",
@@ -60,14 +88,10 @@ function genreLabel(val: string) {
   return val.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// --- Draggable manga card ---
+// --- Manga Card ---
 
-function DraggableMangaCard({ project }: { project: Project }) {
+function MangaCard({ project }: { project: Project }) {
   const navigate = useNavigate();
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: project.slug,
-  });
-
   const { doneCount, mainStatus } = statusForProject(project);
   const progress =
     project.chapter_count > 0
@@ -76,168 +100,72 @@ function DraggableMangaCard({ project }: { project: Project }) {
 
   return (
     <div
-      ref={setNodeRef}
-      className={`group flex items-center gap-3 rounded-lg border bg-card px-4 py-3 transition-all ${
-        isDragging ? "opacity-30" : "hover:border-primary/30 hover:bg-muted/30"
-      }`}
+      className="group cursor-pointer overflow-hidden rounded-lg border bg-card transition-all hover:border-primary/30 hover:shadow-md"
+      onClick={() => navigate(`/project/${project.slug}`)}
     >
-      <button
-        className="cursor-grab touch-none text-muted-foreground/40 hover:text-muted-foreground"
-        {...listeners}
-        {...attributes}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
+      {/* Cover */}
+      <div className="relative aspect-[2/3] w-full overflow-hidden bg-muted">
+        {project.metadata?.cover_url ? (
+          <img
+            src={project.metadata.cover_url}
+            alt={project.display_name}
+            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+            draggable={false}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <BookOpen className="h-10 w-10 text-muted-foreground/20" />
+          </div>
+        )}
 
-      <div
-        className="flex flex-1 cursor-pointer items-center gap-4"
-        onClick={() => navigate(`/project/${project.slug}`)}
-      >
-        <div className="min-w-0 flex-1">
-          <div className="font-medium text-sm truncate">{project.display_name}</div>
-          {project.metadata?.tags && project.metadata.tags.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {project.metadata.tags.slice(0, 3).map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary"
-                >
-                  {genreLabel(tag)}
-                </span>
-              ))}
-              {project.metadata.tags.length > 3 && (
-                <span className="text-[10px] text-muted-foreground">
-                  +{project.metadata.tags.length - 3}
-                </span>
-              )}
-            </div>
-          )}
+        {/* Status badge */}
+        <div className="absolute right-2 top-2">
+          <Badge variant={statusVariant[mainStatus] || "info"}>
+            {mainStatus}
+          </Badge>
         </div>
 
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {doneCount}/{project.chapter_count}
-        </span>
+        {/* Hover arrow */}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+          <ArrowRight className="h-6 w-6 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+        </div>
+      </div>
 
+      {/* Info */}
+      <div className="px-3 py-2 space-y-1.5">
+        <h3 className="text-sm font-medium truncate">
+          {project.display_name}
+        </h3>
+
+        {/* Progress */}
         <div className="flex items-center gap-2">
-          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full bg-primary transition-all"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <span className="text-xs text-muted-foreground tabular-nums w-8">
-            {progress}%
+          <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+            {doneCount}/{project.chapter_count}
           </span>
         </div>
 
-        {project.automation_avg != null && project.automation_avg > 0 ? (
-          <span
-            className={`text-xs font-medium tabular-nums ${
-              project.automation_avg >= 80
-                ? "text-emerald-400"
-                : project.automation_avg >= 40
-                  ? "text-amber-400"
-                  : "text-zinc-400"
-            }`}
-          >
-            {project.automation_avg.toFixed(0)}%
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground/50 w-8">—</span>
-        )}
-
-        <Badge variant={statusVariant[mainStatus] || "info"}>{mainStatus}</Badge>
-        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-      </div>
-    </div>
-  );
-}
-
-// --- Drag overlay (ghost card) ---
-
-function DragOverlayCard({ project }: { project: Project }) {
-  const { doneCount, mainStatus } = statusForProject(project);
-
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-primary/40 bg-card px-4 py-3 shadow-lg scale-[1.02]">
-      <GripVertical className="h-4 w-4 text-muted-foreground/40" />
-      <div className="flex flex-1 items-center gap-4">
-        <div className="font-medium text-sm">{project.display_name}</div>
-        <span className="text-xs text-muted-foreground">
-          {doneCount}/{project.chapter_count}
-        </span>
-        <Badge variant={statusVariant[mainStatus] || "info"}>{mainStatus}</Badge>
-      </div>
-    </div>
-  );
-}
-
-// --- Droppable folder section ---
-
-function FolderSection({
-  folderId,
-  folderName,
-  projects,
-  onDelete,
-}: {
-  folderId: string;
-  folderName: string;
-  projects: Project[];
-  onDelete?: () => void;
-}) {
-  const [collapsed, setCollapsed] = useState(false);
-  const { setNodeRef, isOver } = useDroppable({ id: folderId });
-
-  const isUncategorized = folderId === "__uncategorized__";
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`rounded-lg border transition-colors ${
-        isOver ? "border-primary bg-primary/5" : "border-border"
-      }`}
-    >
-      <button
-        className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
-        onClick={() => setCollapsed((prev) => !prev)}
-      >
-        {collapsed ? (
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        )}
-        <FolderOpen className="h-4 w-4 text-primary/70" />
-        <span className="text-sm font-medium flex-1">{folderName}</span>
-        <span className="text-xs text-muted-foreground">{projects.length} ta</span>
-        {!isUncategorized && onDelete && (
-          <span
-            className="ml-2 rounded p-1 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </span>
-        )}
-      </button>
-
-      <div
-        className={`overflow-hidden transition-all duration-200 ${
-          collapsed ? "max-h-0 opacity-0" : "max-h-[5000px] opacity-100"
-        }`}
-      >
-        {projects.length > 0 ? (
-          <div className="space-y-1 px-3 pb-3">
-            {projects.map((project) => (
-              <DraggableMangaCard key={project.slug} project={project} />
+        {/* Tags */}
+        {project.metadata?.tags && project.metadata.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {project.metadata.tags.slice(0, 2).map((tag) => (
+              <span
+                key={tag}
+                className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary"
+              >
+                {genreLabel(tag)}
+              </span>
             ))}
-          </div>
-        ) : (
-          <div className="px-4 pb-4 text-center">
-            <p className="text-xs text-muted-foreground/50 py-4">
-              Mangalarni shu yerga tashlang
-            </p>
+            {project.metadata.tags.length > 2 && (
+              <span className="text-[11px] text-muted-foreground">
+                +{project.metadata.tags.length - 2}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -250,119 +178,25 @@ function FolderSection({
 interface FolderViewProps {
   projects: Project[];
   error: string | null;
-  onProjectsChange: (projects: Project[]) => void;
 }
 
-export default function FolderView({
-  projects,
-  error,
-  onProjectsChange,
-}: FolderViewProps) {
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [newFolderName, setNewFolderName] = useState("");
-  const [folders, setFolders] = useState<Folder[]>([]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
-  );
-
-  // Folderlarni API dan yuklash
-  useEffect(() => {
-    api.getFolders().then(setFolders).catch(() => {});
-  }, []);
-
-  // Group projects by folder
+export default function FolderView({ projects, error }: FolderViewProps) {
+  // Group projects by pipeline stage
   const grouped = useMemo(() => {
-    const map: Record<string, Project[]> = { __uncategorized__: [] };
-    for (const f of folders) {
-      map[f.name] = [];
-    }
+    const map: Record<string, Project[]> = {
+      all: projects,
+      uploaded: [],
+      ocr: [],
+      translate: [],
+      publish: [],
+      done: [],
+    };
     for (const p of projects) {
-      const key = p.folder || "__uncategorized__";
-      if (!map[key]) map[key] = [];
-      map[key].push(p);
+      const stage = getProjectStage(p);
+      map[stage].push(p);
     }
     return map;
-  }, [projects, folders]);
-
-  const activeProject = activeId
-    ? projects.find((p) => p.slug === activeId) ?? null
-    : null;
-
-  function handleDragStart(event: DragStartEvent) {
-    setActiveId(event.active.id as string);
-  }
-
-  async function handleDragEnd(event: DragEndEvent) {
-    setActiveId(null);
-    const { active, over } = event;
-    if (!over) return;
-
-    const slug = active.id as string;
-    const targetFolder = over.id as string;
-    const newFolder = targetFolder === "__uncategorized__" ? "" : targetFolder;
-
-    const project = projects.find((p) => p.slug === slug);
-    if (!project) return;
-
-    const currentFolder = project.folder || "";
-    if (currentFolder === newFolder) return;
-
-    // Optimistic update
-    const updated = projects.map((p) =>
-      p.slug === slug ? { ...p, folder: newFolder } : p
-    );
-    onProjectsChange(updated);
-
-    try {
-      await api.updateProjectFolder(slug, newFolder);
-    } catch (e) {
-      toast.error((e as Error).message);
-      onProjectsChange(projects);
-    }
-  }
-
-  async function handleCreateFolder() {
-    const name = newFolderName.trim();
-    if (!name) return;
-    if (folders.some((f) => f.name === name)) {
-      toast.error("Bu nomli folder allaqachon mavjud");
-      return;
-    }
-
-    try {
-      const created = await api.createFolder(name);
-      setFolders((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-      setDialogOpen(false);
-      setNewFolderName("");
-      toast.success(`"${name}" folder yaratildi`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-  }
-
-  async function handleDeleteFolder(folderName: string) {
-    if (!confirm(`"${folderName}" folderni o'chirmoqchimisiz? Ichidagi mangalar "Barchasi"ga ko'chadi.`)) {
-      return;
-    }
-
-    // Optimistic update
-    const prevFolders = folders;
-    const prevProjects = projects;
-    setFolders((prev) => prev.filter((f) => f.name !== folderName));
-    onProjectsChange(
-      projects.map((p) => (p.folder === folderName ? { ...p, folder: "" } : p))
-    );
-
-    try {
-      await api.deleteFolder(folderName);
-    } catch (e) {
-      toast.error((e as Error).message);
-      setFolders(prevFolders);
-      onProjectsChange(prevProjects);
-    }
-  }
+  }, [projects]);
 
   if (error) {
     return (
@@ -378,7 +212,7 @@ export default function FolderView({
         <BookOpen className="mb-2 h-8 w-8 text-muted-foreground/30" />
         <p className="text-sm text-muted-foreground">Hali manga yo'q</p>
         <p className="mt-1 text-xs text-muted-foreground/60">
-          "Yangi yuklash" tugmasini bosib boshlang
+          "Yangi manga" tugmasini bosib boshlang
         </p>
       </div>
     );
@@ -388,89 +222,47 @@ export default function FolderView({
     <div>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold">Mangalar</h2>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">
-            {projects.length} ta loyiha
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 gap-1 text-xs"
-            onClick={() => setDialogOpen(true)}
-          >
-            <FolderPlus className="h-3.5 w-3.5" />
-            Folder
-          </Button>
-        </div>
+        <span className="text-xs text-muted-foreground">
+          {projects.length} ta loyiha
+        </span>
       </div>
 
-      <DndContext
-        sensors={sensors}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="space-y-3">
-          {/* Named folders */}
-          {folders.map((folder) => (
-            <FolderSection
-              key={folder.name}
-              folderId={folder.name}
-              folderName={folder.name}
-              projects={grouped[folder.name] || []}
-              onDelete={() => handleDeleteFolder(folder.name)}
-            />
-          ))}
+      <Tabs defaultValue="all">
+        <TabsList className="flex-wrap h-auto gap-1">
+          {stageTabs.map((tab) => {
+            const Icon = tab.icon;
+            const count = grouped[tab.id]?.length ?? 0;
+            return (
+              <TabsTrigger key={tab.id} value={tab.id} className="gap-1.5">
+                <Icon className="h-3.5 w-3.5" />
+                {tab.label}
+                <span className="ml-0.5 rounded-full bg-muted px-1.5 text-[10px] tabular-nums text-muted-foreground">
+                  {count}
+                </span>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
 
-          {/* Uncategorized */}
-          <FolderSection
-            folderId="__uncategorized__"
-            folderName="Barchasi"
-            projects={grouped.__uncategorized__ || []}
-          />
-        </div>
-
-        <DragOverlay>
-          {activeProject ? <DragOverlayCard project={activeProject} /> : null}
-        </DragOverlay>
-      </DndContext>
-
-      {/* Create folder dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Yangi folder</DialogTitle>
-            <DialogDescription>
-              Mangalarni guruhlash uchun folder yarating.
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleCreateFolder();
-            }}
-          >
-            <Input
-              autoFocus
-              placeholder="Folder nomi"
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-            />
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setDialogOpen(false)}
-              >
-                Bekor
-              </Button>
-              <Button type="submit" size="sm" disabled={!newFolderName.trim()}>
-                Yaratish
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+        {stageTabs.map((tab) => (
+          <TabsContent key={tab.id} value={tab.id}>
+            {(grouped[tab.id]?.length ?? 0) > 0 ? (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
+                {grouped[tab.id].map((project) => (
+                  <MangaCard key={project.slug} project={project} />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-center">
+                <tab.icon className="mb-2 h-6 w-6 text-muted-foreground/20" />
+                <p className="text-xs text-muted-foreground/50">
+                  Bu bosqichda manga yo'q
+                </p>
+              </div>
+            )}
+          </TabsContent>
+        ))}
+      </Tabs>
     </div>
   );
 }
