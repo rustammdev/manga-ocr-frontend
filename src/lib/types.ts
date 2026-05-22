@@ -11,11 +11,15 @@ export type Chapter = {
   image_count: number;
   status: ChapterStatus;
   job_id?: string | null;
+  source?: string;
   automation_score?: number;
   has_tall_images?: boolean;
   crop_status?: string | null;
   is_validated?: boolean;
   thumbnail_url?: string;
+  remote?: boolean;
+  r2_chapter_key?: string;
+  published_page_count?: number;
 };
 
 export type ProjectMetadata = {
@@ -59,6 +63,21 @@ export type ProjectCreateRequest = {
   translator_model?: string;
   limit?: number;
   folder?: string;
+};
+
+export type MangaAutofillRequest = {
+  raw_text: string;
+};
+
+export type MangaAutofillResponse = {
+  name: string;
+  description: string;
+  title_uz: string;
+  title_ru: string;
+  title_en: string;
+  title_ja: string;
+  title_ko: string;
+  tags: string[];
 };
 
 export type ProjectMetadataUpdate = {
@@ -275,4 +294,33 @@ export type PublishStartResponse = {
   publish_id: string;
   chapters_to_publish?: number;
   pages_to_publish?: number;
+};
+
+export type R2SyncRequest = {
+  mode?: "all" | "manga";
+  manga?: string | null;
+  dry_run?: boolean;
+  overwrite_local?: boolean;
+};
+
+export type R2SyncProjectSummary = {
+  slug: string;
+  title: string;
+  chapters: number;
+  created_chapters: number;
+  updated_chapters: number;
+  skipped_local_chapters: number;
+};
+
+export type R2SyncResponse = {
+  dry_run: boolean;
+  overwrite_local: boolean;
+  scanned_projects: number;
+  created_projects: number;
+  updated_projects: number;
+  created_chapters: number;
+  updated_chapters: number;
+  skipped_local_chapters: { manga: string; chapter: string; source: string }[];
+  warnings: string[];
+  projects: R2SyncProjectSummary[];
 };

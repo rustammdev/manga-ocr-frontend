@@ -20,23 +20,35 @@ export default function GenrePicker({ value, onChange, max = 10 }: Props) {
     api.getGenres().then(setAllGenres).catch(() => {});
   }, []);
 
+  function normalizeTag(tag: string) {
+    return tag.trim().replace(/\s+/g, " ").toLowerCase();
+  }
+
   const labelMap = useCallback(
-    (val: string) => allGenres.find((g) => g.value === val)?.label ?? val.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    (val: string) => allGenres.find((g) => g.value === val)?.label ?? val,
     [allGenres],
   );
 
+  const normalizedSearch = normalizeTag(search);
   const filtered = allGenres.filter(
     (g) =>
       !value.includes(g.value) &&
       (g.label.toLowerCase().includes(search.toLowerCase()) ||
         g.value.includes(search.toLowerCase())),
   );
+  const canCreate =
+    normalizedSearch.length > 0 &&
+    value.length < max &&
+    !value.includes(normalizedSearch) &&
+    !allGenres.some((g) => g.value === normalizedSearch);
 
   function toggle(genre: string) {
-    if (value.includes(genre)) {
-      onChange(value.filter((v) => v !== genre));
+    const normalized = normalizeTag(genre);
+    if (!normalized) return;
+    if (value.includes(normalized)) {
+      onChange(value.filter((v) => v !== normalized));
     } else if (value.length < max) {
-      onChange([...value, genre]);
+      onChange([...value, normalized]);
       setSearch("");
     }
   }
@@ -62,7 +74,7 @@ export default function GenrePicker({ value, onChange, max = 10 }: Props) {
       >
         <span className="text-muted-foreground">
           {value.length === 0
-            ? "Janr tanlang..."
+            ? "Janr yoki tag tanlang..."
             : `${value.length} ta tanlandi`}
         </span>
         <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
@@ -99,13 +111,22 @@ export default function GenrePicker({ value, onChange, max = 10 }: Props) {
               autoFocus
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Qidirish..."
+              placeholder="Qidirish yoki yangi tag yozish..."
               className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
             />
           </div>
           {/* Options */}
           <div className="max-h-48 overflow-auto py-1">
-            {filtered.length === 0 ? (
+            {canCreate && (
+              <button
+                type="button"
+                className="flex w-full items-center px-3 py-1.5 text-sm hover:bg-muted/50"
+                onClick={() => toggle(normalizedSearch)}
+              >
+                Qo'shish: {normalizedSearch}
+              </button>
+            )}
+            {filtered.length === 0 && !canCreate ? (
               <div className="px-3 py-2 text-xs text-muted-foreground">
                 Topilmadi
               </div>

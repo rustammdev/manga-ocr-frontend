@@ -6,12 +6,16 @@ import type {
   JobInfo,
   JobStartResponse,
   MangaAutomation,
+  MangaAutofillRequest,
+  MangaAutofillResponse,
   OcrBackendInfo,
   PageInfo,
   Project,
   ProjectCreateRequest,
   ProjectMetadataUpdate,
   PublishStartResponse,
+  R2SyncRequest,
+  R2SyncResponse,
   RestartResponse,
   ResultsData,
   RetranslateRequest,
@@ -52,6 +56,13 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }).then(handle<Project>);
+  },
+  autofillProject(payload: MangaAutofillRequest): Promise<MangaAutofillResponse> {
+    return fetch("/api/projects/autofill", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then(handle<MangaAutofillResponse>);
   },
   updateProjectMetadata(slug: string, metadata: ProjectMetadataUpdate) {
     return fetch(`/api/projects/${encodeURIComponent(slug)}/metadata`, {
@@ -368,6 +379,13 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chapters }),
     }).then(handle<{ message: string; chapters: string[]; deleted_files: number }>);
+  },
+  syncR2(payload: R2SyncRequest): Promise<R2SyncResponse> {
+    return fetch("/api/r2/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then(handle<R2SyncResponse>);
   },
 
   // ── Thumbnails ──────────────────────────────────────────────────────

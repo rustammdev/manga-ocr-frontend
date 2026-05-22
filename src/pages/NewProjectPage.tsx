@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Sparkles } from "lucide-react";
 
 import { api } from "../lib/api";
 import type { CleanerBackendValue, Folder, OcrBackendValue, TranslatorModelInfo, TranslatorModelsMap } from "../lib/types";
@@ -14,13 +14,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import GenrePicker from "../components/GenrePicker";
 import OcrBackendSelect from "../components/OcrBackendSelect";
 
 export default function NewProjectPage() {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
+  const [autofilling, setAutofilling] = useState(false);
   const [error, setError] = useState("");
+  const [autoFillError, setAutoFillError] = useState("");
+  const [rawData, setRawData] = useState("");
+  const [activeTab, setActiveTab] = useState<"manual" | "autofill">("manual");
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -46,6 +51,33 @@ export default function NewProjectPage() {
 
   const currentModels: TranslatorModelInfo[] = modelsMap[backend] || [];
   const defaultModel = currentModels.find((m) => m.default)?.value || "";
+
+  async function handleAutoFill() {
+    if (!rawData.trim()) {
+      setAutoFillError("Raw data kiriting");
+      return;
+    }
+    setAutofilling(true);
+    setAutoFillError("");
+    setError("");
+    try {
+      const result = await api.autofillProject({ raw_text: rawData.trim() });
+      setName(result.name || name);
+      setDescription(result.description || description);
+      setTitleUz(result.title_uz || titleUz);
+      setTitleRu(result.title_ru || titleRu);
+      setTitleEn(result.title_en || titleEn);
+      setTitleJa(result.title_ja || titleJa);
+      setTitleKo(result.title_ko || titleKo);
+      if (result.tags?.length) setTags(result.tags);
+      setActiveTab("manual");
+    } catch (e) {
+      const err = e as Error;
+      setAutoFillError(err.message);
+    } finally {
+      setAutofilling(false);
+    }
+  }
 
   async function handleCreate() {
     if (!name.trim()) {
@@ -88,61 +120,95 @@ export default function NewProjectPage() {
       </div>
 
       <div className="mx-auto max-w-2xl space-y-6">
-        {/* Name */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium">
-            Manga nomi <span className="text-red-400">*</span>
-          </label>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="masalan: one-piece"
-          />
-        </div>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "manual" | "autofill")}>
+          <TabsList className="w-full">
+            <TabsTrigger value="manual" className="flex-1">Qo'lda</TabsTrigger>
+            <TabsTrigger value="autofill" className="flex-1 gap-2">
+              <Sparkles className="h-4 w-4" />
+              Auto fill
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Description */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium">Tavsif</label>
-          <Textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Manga haqida qisqacha ma'lumot..."
-            className="min-h-[80px]"
-          />
-        </div>
+          <TabsContent value="autofill" className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Raw data</label>
+              <Textarea
+                value={rawData}
+                onChange={(e) => setRawData(e.target.value)}
+                placeholder="Title, alternative titles, synopsis, genres yoki boshqa metadata matnini shu yerga paste qiling..."
+                className="min-h-[180px]"
+              />
+            </div>
+            {autoFillError && (
+              <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+                {autoFillError}
+              </div>
+            )}
+            <Button onClick={handleAutoFill} disabled={autofilling || !rawData.trim()} className="gap-2">
+              {autofilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {autofilling ? "To'ldirilmoqda..." : "Auto fill"}
+            </Button>
+          </TabsContent>
 
-        {/* Titles */}
-        <div className="space-y-3">
-          <label className="text-sm font-medium">Sarlavhalar (turli tillarda)</label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">O'zbekcha</label>
-              <Input value={titleUz} onChange={(e) => setTitleUz(e.target.value)} placeholder="O'zbek tilidagi nomi" />
+          <TabsContent value="manual" className="space-y-6">
+            {/* Name */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Manga nomi <span className="text-red-400">*</span>
+              </label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="masalan: one-piece"
+              />
             </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Ruscha</label>
-              <Input value={titleRu} onChange={(e) => setTitleRu(e.target.value)} placeholder="Русское название" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Inglizcha</label>
-              <Input value={titleEn} onChange={(e) => setTitleEn(e.target.value)} placeholder="English title" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Yaponcha</label>
-              <Input value={titleJa} onChange={(e) => setTitleJa(e.target.value)} placeholder="日本語タイトル" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Koreyscha</label>
-              <Input value={titleKo} onChange={(e) => setTitleKo(e.target.value)} placeholder="한국어 제목" />
-            </div>
-          </div>
-        </div>
 
-        {/* Genres */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium">Janrlar</label>
-          <GenrePicker value={tags} onChange={setTags} />
-        </div>
+            {/* Description */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Tavsif</label>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Manga haqida qisqacha ma'lumot..."
+                className="min-h-[80px]"
+              />
+            </div>
+
+            {/* Titles */}
+            <div className="space-y-3">
+              <label className="text-sm font-medium">Sarlavhalar (turli tillarda)</label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">O'zbekcha</label>
+                  <Input value={titleUz} onChange={(e) => setTitleUz(e.target.value)} placeholder="O'zbek tilidagi nomi" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Ruscha</label>
+                  <Input value={titleRu} onChange={(e) => setTitleRu(e.target.value)} placeholder="Русское название" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Inglizcha</label>
+                  <Input value={titleEn} onChange={(e) => setTitleEn(e.target.value)} placeholder="English title" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Yaponcha</label>
+                  <Input value={titleJa} onChange={(e) => setTitleJa(e.target.value)} placeholder="日本語タイトル" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Koreyscha</label>
+                  <Input value={titleKo} onChange={(e) => setTitleKo(e.target.value)} placeholder="한국어 제목" />
+                </div>
+              </div>
+            </div>
+
+            {/* Genres */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Janrlar</label>
+              <GenrePicker value={tags} onChange={setTags} />
+            </div>
+          </TabsContent>
+        </Tabs>
+
 
         {/* Folder */}
         <div className="space-y-1.5">

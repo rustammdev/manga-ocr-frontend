@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Play, Eye, Pencil, Loader2, Trash2, Scissors, ArrowUpDown, CheckCircle2, Circle, Upload, CloudUpload, CloudOff, ImageIcon } from "lucide-react";
+import { Play, Eye, Pencil, Loader2, Trash2, Scissors, ArrowUpDown, CheckCircle2, Circle, Upload, Cloud, CloudUpload, CloudOff, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "../../lib/api";
@@ -25,6 +25,10 @@ const statusLabel: Record<string, string> = {
   uploaded: "Yuklangan",
   failed: "Xatolik",
 };
+
+function isRemoteR2Chapter(chapter: Chapter) {
+  return chapter.remote || chapter.source === "r2";
+}
 
 interface ChapterListProps {
   chapters: Chapter[];
@@ -93,10 +97,14 @@ export default function ChapterList({
   }
 
   function toggleSelectAll() {
-    if (selectedPublished.size === publishedChapters.length) {
+    const unpublishablePublished = chapters
+      .filter((chapter) => publishedChapters.includes(chapter.name) && !isRemoteR2Chapter(chapter))
+      .map((chapter) => chapter.name);
+
+    if (selectedPublished.size === unpublishablePublished.length) {
       setSelectedPublished(new Set());
     } else {
-      setSelectedPublished(new Set(publishedChapters));
+      setSelectedPublished(new Set(unpublishablePublished));
     }
   }
 
@@ -118,7 +126,12 @@ export default function ChapterList({
     }
   }
 
-  const hasPublished = publishedChapters.length > 0;
+  const remoteChapters = chapters.filter(isRemoteR2Chapter);
+  const localChapters = chapters.filter((chapter) => !isRemoteR2Chapter(chapter));
+  const unpublishablePublished = localChapters
+    .filter((chapter) => publishedChapters.includes(chapter.name))
+    .map((chapter) => chapter.name);
+  const hasPublished = unpublishablePublished.length > 0;
 
   return (
     <div className="min-w-0 xl:flex-1">
@@ -129,13 +142,16 @@ export default function ChapterList({
               <input
                 type="checkbox"
                 className="h-3.5 w-3.5 rounded border-muted-foreground/40 accent-orange-500 cursor-pointer"
-                checked={selectedPublished.size === publishedChapters.length && publishedChapters.length > 0}
+                checked={selectedPublished.size === unpublishablePublished.length && unpublishablePublished.length > 0}
                 onChange={toggleSelectAll}
                 title="Barchasini tanlash"
               />
             )}
             <span className="text-sm font-medium">Chapterlar</span>
-            <span className="text-xs text-muted-foreground">{chapters.length} ta</span>
+            <span className="text-xs text-muted-foreground">
+              {chapters.length} ta
+              {remoteChapters.length > 0 ? `, ${remoteChapters.length} R2` : ""}
+            </span>
           </div>
           {selectedPublished.size > 0 ? (
             <Button
@@ -163,8 +179,40 @@ export default function ChapterList({
             </p>
           </div>
         ) : (
-          <div className="divide-y">
-            {chapters.map((chapter) => {
+          <div>
+            {remoteChapters.length > 0 && (
+              <div className="border-b bg-sky-500/[0.03] px-5 py-3">
+                <div className="mb-2 flex items-center gap-2 text-xs font-medium text-sky-300">
+                  <Cloud className="h-3.5 w-3.5" />
+                  R2 synced
+                  <span className="text-muted-foreground">
+                    {remoteChapters.length} bob, klik va actionlar o'chirilgan
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {remoteChapters.map((chapter) => (
+                    <span
+                      key={chapter.name}
+                      className="inline-flex h-7 items-center gap-1 rounded border border-sky-400/20 bg-sky-400/10 px-2 text-[11px] text-sky-200"
+                      title={`${chapter.r2_chapter_key || chapter.name}: ${chapter.published_page_count || chapter.image_count} sahifa`}
+                    >
+                      {chapter.name}
+                      <span className="text-sky-100/60">
+                        {chapter.published_page_count || chapter.image_count}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {localChapters.length === 0 ? (
+              <div className="p-6 text-center text-xs text-muted-foreground">
+                Lokal OCR/tarjima chapterlari yo'q.
+              </div>
+            ) : (
+              <div className="divide-y">
+                {localChapters.map((chapter) => {
               const isClickable = chapter.status === "done" || chapter.status === "ocr_done";
               const isPublished = publishedChapters.includes(chapter.name);
               return (
@@ -383,7 +431,9 @@ export default function ChapterList({
                   </div>
                 </div>
               );
-            })}
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>

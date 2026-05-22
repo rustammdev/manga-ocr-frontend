@@ -79,7 +79,12 @@ export default function ProjectPage() {
   const hasTranslating = chapters.some((ch) => ch.status === "translating");
   const publishedChapters = project?.published_chapters || [];
   const hasPublishableChapters = chapters.some(
-    (ch) => ch.status === "done" && ch.is_validated && !publishedChapters.includes(ch.name)
+    (ch) =>
+      ch.status === "done" &&
+      ch.is_validated &&
+      !ch.remote &&
+      ch.source !== "r2" &&
+      !publishedChapters.includes(ch.name)
   );
 
   // Active job WebSocket watcher — job tugaganda toast + refresh
