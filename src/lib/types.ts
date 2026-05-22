@@ -21,6 +21,7 @@ export type Chapter = {
   r2_chapter_key?: string;
   published_page_count?: number;
   auto_merged?: boolean;
+  timings?: Record<string, number>;
 };
 
 export type ProjectMetadata = {

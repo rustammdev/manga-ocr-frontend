@@ -36,6 +36,47 @@ function chapterBadgeLabel(chapter: Chapter): string {
   return statusLabel[chapter.status] || chapter.status;
 }
 
+function formatDuration(seconds: number): string {
+  if (!seconds || seconds <= 0) return "0s";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  if (m < 60) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return mm > 0 ? `${h}h ${mm}m` : `${h}h`;
+}
+
+const TIMING_LABELS: Record<string, string> = {
+  auto_merge: "Auto merge",
+  ocr: "OCR",
+  clean: "Clean",
+  translate: "Tarjima",
+};
+
+function timingTooltip(timings: Record<string, number>): string {
+  const order = ["auto_merge", "ocr", "clean", "translate"];
+  const lines: string[] = [];
+  for (const key of order) {
+    const sec = timings[key];
+    if (sec && sec > 0) {
+      lines.push(`${TIMING_LABELS[key] || key}: ${formatDuration(sec)}`);
+    }
+  }
+  // Boshqa nomdagi timinglar bo'lsa
+  for (const [key, sec] of Object.entries(timings)) {
+    if (!order.includes(key) && sec > 0) {
+      lines.push(`${TIMING_LABELS[key] || key}: ${formatDuration(sec)}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function totalTimingSec(timings: Record<string, number> | undefined): number {
+  if (!timings) return 0;
+  return Object.values(timings).reduce((a, b) => a + (b > 0 ? b : 0), 0);
+}
+
 function isRemoteR2Chapter(chapter: Chapter) {
   return chapter.remote || chapter.source === "r2";
 }
@@ -352,6 +393,14 @@ export default function ChapterList({
                         title="Avtomatlashtirish foizi"
                       >
                         {chapter.automation_score.toFixed(0)}% auto
+                      </span>
+                    )}
+                    {totalTimingSec(chapter.timings) > 0 && (
+                      <span
+                        className="text-[11px] font-medium tabular-nums text-sky-400"
+                        title={timingTooltip(chapter.timings || {})}
+                      >
+                        ⏱ {formatDuration(totalTimingSec(chapter.timings))}
                       </span>
                     )}
                   </div>
