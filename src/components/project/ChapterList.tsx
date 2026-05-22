@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Play, Eye, Pencil, Loader2, Trash2, Scissors, ArrowUpDown, CheckCircle2, Circle, Upload, Cloud, CloudUpload, CloudOff, ImageIcon } from "lucide-react";
+import { Play, Eye, Pencil, Loader2, Trash2, Scissors, ArrowUpDown, CheckCircle2, Circle, Upload, Cloud, CloudUpload, CloudOff, ImageIcon, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "../../lib/api";
@@ -25,6 +25,16 @@ const statusLabel: Record<string, string> = {
   uploaded: "Yuklangan",
   failed: "Xatolik",
 };
+
+function chapterBadgeVariant(chapter: Chapter): "success" | "info" | "warning" | "danger" {
+  if (chapter.status === "uploaded" && chapter.auto_merged) return "success";
+  return statusVariant[chapter.status] || "info";
+}
+
+function chapterBadgeLabel(chapter: Chapter): string {
+  if (chapter.status === "uploaded" && chapter.auto_merged) return "Tartiblangan";
+  return statusLabel[chapter.status] || chapter.status;
+}
 
 function isRemoteR2Chapter(chapter: Chapter) {
   return chapter.remote || chapter.source === "r2";
@@ -59,6 +69,35 @@ export default function ChapterList({
   const [startingChapter, setStartingChapter] = useState<string | null>(null);
   const [selectedPublished, setSelectedPublished] = useState<Set<string>>(new Set());
   const [unpublishing, setUnpublishing] = useState(false);
+  const [autoMergingChapters, setAutoMergingChapters] = useState<Set<string>>(new Set());
+
+  async function handleAutoMerge(chapter: Chapter) {
+    setAutoMergingChapters((prev) => {
+      const next = new Set(prev);
+      next.add(chapter.name);
+      return next;
+    });
+    try {
+      const res = await api.autoMerge(projectName, chapter.name);
+      if (res.merge_groups === 0) {
+        toast.info(`${chapter.name}-bob: birlashtirish kerak emas`);
+      } else {
+        toast.success(
+          `${chapter.name}-bob: ${res.total_merged} rasm ${res.merge_groups} guruhga birlashtirildi`
+        );
+      }
+      const updated = await api.getProject(projectName);
+      onProjectUpdate(updated);
+    } catch (e) {
+      toast.error(`${chapter.name}-bob: ${(e as Error).message}`);
+    } finally {
+      setAutoMergingChapters((prev) => {
+        const next = new Set(prev);
+        next.delete(chapter.name);
+        return next;
+      });
+    }
+  }
 
   async function handleStartJob(chapter: Chapter) {
     setStartingChapter(chapter.name);
@@ -293,8 +332,8 @@ export default function ChapterList({
                       <div className="text-sm font-medium">{chapter.name}-bob</div>
                       <div className="text-xs text-muted-foreground">{chapter.image_count} rasm</div>
                     </div>
-                    <Badge variant={statusVariant[chapter.status] || "info"}>
-                      {statusLabel[chapter.status] || chapter.status}
+                    <Badge variant={chapterBadgeVariant(chapter)}>
+                      {chapterBadgeLabel(chapter)}
                     </Badge>
                     {isPublished && (
                       <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-sky-400" title="Published">
@@ -370,6 +409,26 @@ export default function ChapterList({
                           </Button>
                         </Link>
                       )}
+                    {(chapter.status === "uploaded" || chapter.status === "failed") && !chapter.auto_merged && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 gap-1 text-xs"
+                        disabled={autoMergingChapters.has(chapter.name)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAutoMerge(chapter);
+                        }}
+                        title="Qisqa rasmlarni avtomatik birlashtirish"
+                      >
+                        {autoMergingChapters.has(chapter.name) ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Wand2 className="h-3.5 w-3.5" />
+                        )}
+                        Auto tartib
+                      </Button>
+                    )}
                     <Link
                       to={`/reorder/${projectName}/${chapter.name}`}
                       onClick={(e) => e.stopPropagation()}

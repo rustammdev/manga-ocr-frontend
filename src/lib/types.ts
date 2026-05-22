@@ -20,6 +20,7 @@ export type Chapter = {
   remote?: boolean;
   r2_chapter_key?: string;
   published_page_count?: number;
+  auto_merged?: boolean;
 };
 
 export type ProjectMetadata = {
