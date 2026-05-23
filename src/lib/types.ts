@@ -283,6 +283,19 @@ export type PageInfo = {
 };
 
 export type UploadResponse = { manga: string; chapter: string; saved: number };
+
+export type BulkUploadFolderResult = {
+  folder: string;
+  chapter: string;
+  saved: number;
+  skipped: boolean;
+};
+export type BulkUploadResponse = {
+  manga: string;
+  chapters: BulkUploadFolderResult[];
+  total_saved: number;
+  chapters_created: number;
+};
 export type JobStartResponse = { job_id: string };
 export type TranslateResponse = { job_id: string; type?: string };
 export type RestartResponse = { job_id: string; old_job_id?: string };

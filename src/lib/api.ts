@@ -38,6 +38,7 @@ import type {
   TranslateResponse,
   TranslatorModelsMap,
   UploadResponse,
+  BulkUploadResponse,
 } from "./types";
 
 async function handle<T>(res: Response): Promise<T> {
@@ -118,6 +119,22 @@ export const api = {
       `/api/upload?manga_slug=${encodeURIComponent(slug)}`,
       { method: "POST", body: form }
     ).then(handle<UploadResponse>);
+  },
+  uploadBulkFolders(
+    slug: string,
+    items: { folder: string; file: File }[],
+  ): Promise<BulkUploadResponse> {
+    const form = new FormData();
+    const folders: string[] = [];
+    for (const it of items) {
+      form.append("files", it.file);
+      folders.push(it.folder);
+    }
+    form.append("folders", JSON.stringify(folders));
+    return fetch(
+      `/api/upload/bulk?manga_slug=${encodeURIComponent(slug)}`,
+      { method: "POST", body: form }
+    ).then(handle<BulkUploadResponse>);
   },
   startJob(payload: Record<string, unknown>): Promise<JobStartResponse> {
     return fetch("/api/jobs", {

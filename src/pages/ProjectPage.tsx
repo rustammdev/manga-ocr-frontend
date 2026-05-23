@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 import { api } from "../lib/api";
 import type { GenreOption, Project, ProjectMetadata, ProjectSettings, WsMessage, AutoPilotConfig } from "../lib/types";
-import { useActiveJobsWatcher, useAutoPilotWebSocket, usePublishWebSocket, type JobFinishInfo } from "../lib/ws";
+import { useActiveJobsWatcher, useAutoPilotWebSocket, useJobWebSocket, usePublishWebSocket, type JobFinishInfo } from "../lib/ws";
 import ProjectHeader from "../components/project/ProjectHeader";
 import ChapterList from "../components/project/ChapterList";
 import MetadataSidebar from "../components/project/MetadataSidebar";
@@ -88,7 +88,11 @@ export default function ProjectPage() {
   const [autoPilotStopping, setAutoPilotStopping] = useState(false);
 
   const chapters = project?.chapters || [];
-  const hasOcrDone = chapters.some((ch) => ch.status === "ocr_done");
+  // OCR natijasi bor (ocr_done) yoki tarjima qilingan (done) — ikkala holatda
+  // ham qayta tarjima qilish mumkin.
+  const hasTranslatable = chapters.some(
+    (ch) => ch.status === "ocr_done" || ch.status === "done",
+  );
   const hasTranslating = chapters.some((ch) => ch.status === "translating");
   const publishedChapters = project?.published_chapters || [];
   const hasPublishableChapters = chapters.some(
@@ -170,28 +174,81 @@ export default function ProjectPage() {
   const [thumbnailModalChapter, setThumbnailModalChapter] = useState<string | null>(null);
 
   const [translatingManga, setTranslatingManga] = useState(false);
+  const [translateJobId, setTranslateJobId] = useState<string | null>(null);
+  const [translateProgress, setTranslateProgress] = useState(0);
+  const [translateMessage, setTranslateMessage] = useState("");
 
   async function handleTranslateManga() {
     if (!manga) return;
-    const displayName = project?.display_name || manga;
-    if (!confirm(`Butun "${displayName}" mangasini tarjima qilmoqchimisiz?`)) return;
+    if (translatingManga || translateJobId) {
+      toast.info("Tarjima allaqachon ishlamoqda");
+      return;
+    }
     setTranslatingManga(true);
     try {
-      await api.translateManga({
+      const res = await api.translateManga({
         manga,
         language: settings.language,
         backend: settings.backend,
         translator_model: settings.translator_model || undefined,
       });
+      // translateManga endpoint job_id qaytaradi — uni saqlaymiz va WS ulaymiz
+      if (res?.job_id) {
+        setTranslateJobId(res.job_id);
+        setTranslateMessage("Tarjima boshlandi...");
+        setTranslateProgress(0);
+      }
       toast.success("Tarjima boshlandi");
       const updated = await api.getProject(manga);
       setProject(updated);
     } catch (e) {
-      toast.error((e as Error).message);
+      const msg = (e as Error).message;
+      toast.error(`Tarjima boshlanmadi: ${msg}`);
+      console.error("translateManga xato:", e);
     } finally {
       setTranslatingManga(false);
     }
   }
+
+  // Tarjima job'i progress'i — chapter'lar parallel tarjima qilinadi.
+  const handleTranslateMessage = useCallback((msg: WsMessage) => {
+    if (msg.type === "log") {
+      if (typeof msg.progress === "number") setTranslateProgress(msg.progress);
+      if (msg.message) setTranslateMessage(msg.message);
+    } else if (msg.type === "done") {
+      const chapters = (msg as { chapters?: number }).chapters;
+      const cost = (msg as { cost_usd?: number }).cost_usd;
+      let txt = "Tarjima tugadi";
+      if (chapters) txt += `: ${chapters} bob`;
+      if (cost) txt += ` ($${cost.toFixed(4)})`;
+      toast.success(txt);
+      setTranslateJobId(null);
+      setTranslateProgress(0);
+      setTranslateMessage("");
+      if (manga) api.getProject(manga).then(setProject).catch(() => {});
+    } else if (msg.type === "error") {
+      toast.error(`Tarjima xato: ${msg.message}`);
+      setTranslateJobId(null);
+      setTranslateProgress(0);
+      setTranslateMessage("");
+      if (manga) api.getProject(manga).then(setProject).catch(() => {});
+    } else if (msg.type === "cancelled") {
+      toast.info("Tarjima bekor qilindi");
+      setTranslateJobId(null);
+      setTranslateProgress(0);
+      setTranslateMessage("");
+      if (manga) api.getProject(manga).then(setProject).catch(() => {});
+    }
+  }, [manga]);
+
+  const handleTranslateClose = useCallback(() => {
+    // WS uzilsa state tozalash
+    setTranslateJobId(null);
+    setTranslateProgress(0);
+    setTranslateMessage("");
+  }, []);
+
+  useJobWebSocket(translateJobId, handleTranslateMessage, handleTranslateClose);
 
   // Publish WS message handler
   const handlePublishMessage = useCallback((msg: WsMessage) => {
@@ -385,8 +442,8 @@ export default function ProjectPage() {
       <ProjectHeader
         manga={manga!}
         displayName={project?.display_name || manga!}
-        hasOcrDone={hasOcrDone}
-        hasTranslating={hasTranslating || translatingManga}
+        hasOcrDone={hasTranslatable}
+        hasTranslating={hasTranslating || translatingManga || translateJobId !== null}
         hasPublishableChapters={hasPublishableChapters}
         isPublishing={isPublishing}
         isAutoPiloting={autoPilotId !== null}
@@ -395,6 +452,20 @@ export default function ProjectPage() {
         onAutoPilot={() => setAutoPilotModalOpen(true)}
         onDelete={handleDeleteProject}
       />
+
+      {/* Translate progress (manga-level) */}
+      {translateJobId && (
+        <div className="rounded-lg border bg-card p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">Tarjima jarayonda...</span>
+          </div>
+          <Progress value={translateProgress} className="h-2 mb-1.5" />
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground line-clamp-1">{translateMessage || "Boshlanmoqda..."}</span>
+            <span className="text-xs font-medium tabular-nums">{translateProgress}%</span>
+          </div>
+        </div>
+      )}
 
       {/* Auto Pilot progress */}
       {autoPilotId && (
