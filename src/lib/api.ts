@@ -1,5 +1,9 @@
 import type {
   AutomationInfo,
+  AutoPilotActiveResponse,
+  AutoPilotConfig,
+  AutoPilotStartResponse,
+  AutoPilotState,
   CropPreviewResponse,
   Folder,
   GenreOption,
@@ -479,5 +483,27 @@ export const api = {
         target_slug: targetSlug,
       }),
     }).then(handle<MangaDexImportMangaResponse>);
+  },
+  startAutoPilot(manga: string, config: AutoPilotConfig): Promise<AutoPilotStartResponse> {
+    return fetch(`/api/auto-pilot/${encodeURIComponent(manga)}/start`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    }).then(handle<AutoPilotStartResponse>);
+  },
+  getAutoPilot(autopilotId: string): Promise<AutoPilotState> {
+    return fetch(`/api/auto-pilot/${encodeURIComponent(autopilotId)}`).then(
+      handle<AutoPilotState>
+    );
+  },
+  getActiveAutoPilot(manga: string): Promise<AutoPilotActiveResponse> {
+    return fetch(`/api/auto-pilot/active/${encodeURIComponent(manga)}`).then(
+      handle<AutoPilotActiveResponse>
+    );
+  },
+  stopAutoPilot(autopilotId: string): Promise<{ status: string; auto_pilot_id: string }> {
+    return fetch(`/api/auto-pilot/${encodeURIComponent(autopilotId)}/stop`, {
+      method: "POST",
+    }).then(handle<{ status: string; auto_pilot_id: string }>);
   },
 };

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, Plus, Languages, Trash2, Loader2, Upload } from "lucide-react";
+import { ArrowLeft, Plus, Languages, Trash2, Loader2, Upload, Rocket } from "lucide-react";
 
 import { Button } from "../ui/button";
 
@@ -10,8 +10,10 @@ interface ProjectHeaderProps {
   hasTranslating: boolean;
   hasPublishableChapters: boolean;
   isPublishing: boolean;
+  isAutoPiloting: boolean;
   onTranslate: () => void;
   onPublish: () => void;
+  onAutoPilot: () => void;
   onDelete: () => void;
 }
 
@@ -22,8 +24,10 @@ export default function ProjectHeader({
   hasTranslating,
   hasPublishableChapters,
   isPublishing,
+  isAutoPiloting,
   onTranslate,
   onPublish,
+  onAutoPilot,
   onDelete,
 }: ProjectHeaderProps) {
   return (
@@ -45,13 +49,30 @@ export default function ProjectHeader({
             Bob qo'shish
           </Button>
         </Link>
+
+        {/* Auto Pilot — barcha bosqichlarni ketma-ket avtomatik bajarish */}
+        <Button
+          size="sm"
+          variant="default"
+          onClick={onAutoPilot}
+          disabled={isAutoPiloting}
+          className="gap-1.5 bg-blue-600 hover:bg-blue-700"
+        >
+          {isAutoPiloting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Rocket className="h-3.5 w-3.5" />
+          )}
+          Auto Pilot
+        </Button>
+
         {hasTranslating ? (
           <Button variant="secondary" size="sm" disabled className="gap-1.5">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Tarjima jarayonda
           </Button>
         ) : hasOcrDone ? (
-          <Button size="sm" onClick={onTranslate} className="gap-1.5">
+          <Button size="sm" variant="outline" onClick={onTranslate} className="gap-1.5">
             <Languages className="h-3.5 w-3.5" />
             Tarjima qilish
           </Button>

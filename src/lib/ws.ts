@@ -69,6 +69,40 @@ export function usePublishWebSocket(
   }, [publishId, onClose, onMessage]);
 }
 
+export function useAutoPilotWebSocket(
+  autoPilotId: string | null | undefined,
+  onMessage: (msg: WsMessage) => void,
+  onClose?: () => void
+) {
+  const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    if (!autoPilotId) return;
+
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const url = `${proto}//${location.host}/ws/auto-pilot/${autoPilotId}`;
+    const ws = new WebSocket(url);
+    wsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data) as WsMessage;
+        onMessage(data);
+      } catch {
+        // ignore
+      }
+    };
+
+    ws.onclose = () => {
+      if (onClose) onClose();
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [autoPilotId, onClose, onMessage]);
+}
+
 export type JobFinishInfo = {
   chapterName: string;
   oldStatus: string;

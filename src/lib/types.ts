@@ -253,8 +253,10 @@ export type RunInfo = {
 };
 
 export type WsMessage =
-  | { type: "log"; message: string; level: string; progress: number; chapter?: string; page?: number; total_pages?: number; uploaded_mb?: number }
-  | { type: "done"; message: string; progress: number; pages?: number; regions?: number; chapters?: number; cost_usd?: number; published_chapters?: number; total_pages?: number; total_mb?: number; cdn_base_url?: string }
+  | { type: "log"; message: string; level?: string; progress: number; chapter?: string; page?: number; total_pages?: number; uploaded_mb?: number; stage?: string; status?: string }
+  | { type: "stage_started"; stage: string; message: string; total: number; progress: number }
+  | { type: "stage_done"; stage: string; message: string; progress: number }
+  | { type: "done"; message: string; progress: number; pages?: number; regions?: number; chapters?: number; cost_usd?: number; published_chapters?: number; total_pages?: number; total_mb?: number; cdn_base_url?: string; stages_completed?: string[]; failed_chapters?: string[] }
   | { type: "error"; message: string; progress: number }
   | { type: "cancelled"; message: string; progress: number }
   | { type: "ping"; message: string };
@@ -296,6 +298,48 @@ export type PublishStartResponse = {
   publish_id: string;
   chapters_to_publish?: number;
   pages_to_publish?: number;
+};
+
+export type AutoPilotConfig = {
+  enable_auto_merge: boolean;
+  enable_ocr: boolean;
+  enable_translate: boolean;
+  enable_publish: boolean;
+  force_ocr?: boolean;
+  force_clean?: boolean;
+};
+
+export type AutoPilotStartResponse = {
+  auto_pilot_id: string;
+  manga: string;
+  config: {
+    enable_auto_merge: boolean;
+    enable_ocr: boolean;
+    enable_translate: boolean;
+    enable_publish: boolean;
+  };
+};
+
+export type AutoPilotState = {
+  id: string;
+  manga: string;
+  status: "running" | "done" | "done_with_errors" | "failed" | "cancelled";
+  current_stage: "auto_merge" | "ocr" | "translate" | "publish" | null;
+  stages_completed: string[];
+  total_chapters: number;
+  completed_chapters: number;
+  failed_chapters: string[];
+  started_at: string;
+  finished_at: string | null;
+  error: string | null;
+  stage_progress: number;
+  config: AutoPilotConfig;
+};
+
+export type AutoPilotActiveResponse = {
+  auto_pilot_id: string | null;
+  active: boolean;
+  state?: AutoPilotState | null;
 };
 
 export type R2SyncRequest = {

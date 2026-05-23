@@ -3,8 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { api } from "../lib/api";
-import type { GenreOption, Project, ProjectMetadata, ProjectSettings, WsMessage } from "../lib/types";
-import { useActiveJobsWatcher, usePublishWebSocket, type JobFinishInfo } from "../lib/ws";
+import type { GenreOption, Project, ProjectMetadata, ProjectSettings, WsMessage, AutoPilotConfig } from "../lib/types";
+import { useActiveJobsWatcher, useAutoPilotWebSocket, usePublishWebSocket, type JobFinishInfo } from "../lib/ws";
 import ProjectHeader from "../components/project/ProjectHeader";
 import ChapterList from "../components/project/ChapterList";
 import MetadataSidebar from "../components/project/MetadataSidebar";
@@ -12,6 +12,8 @@ import EditMetadataModal from "../components/project/EditMetadataModal";
 import SettingsModal from "../components/project/SettingsModal";
 import CoverCropModal from "../components/project/CoverCropModal";
 import ChapterThumbnailModal from "../components/project/ChapterThumbnailModal";
+import AutoPilotModal from "../components/project/AutoPilotModal";
+import AutoPilotProgress from "../components/project/AutoPilotProgress";
 import { Progress } from "../components/ui/progress";
 
 export default function ProjectPage() {
@@ -73,6 +75,17 @@ export default function ProjectPage() {
   const [publishMessage, setPublishMessage] = useState("");
   const [publishUploadedMb, setPublishUploadedMb] = useState(0);
   const [publishingTarget, setPublishingTarget] = useState<"manga" | string | null>(null);
+
+  // Auto Pilot state
+  const [autoPilotModalOpen, setAutoPilotModalOpen] = useState(false);
+  const [autoPilotStarting, setAutoPilotStarting] = useState(false);
+  const [autoPilotId, setAutoPilotId] = useState<string | null>(null);
+  const [autoPilotStage, setAutoPilotStage] = useState<string | null>(null);
+  const [autoPilotMessage, setAutoPilotMessage] = useState("");
+  const [autoPilotProgress, setAutoPilotProgress] = useState(0);
+  const [autoPilotChapter, setAutoPilotChapter] = useState<string | null>(null);
+  const [autoPilotFailed, setAutoPilotFailed] = useState<string[]>([]);
+  const [autoPilotStopping, setAutoPilotStopping] = useState(false);
 
   const chapters = project?.chapters || [];
   const hasOcrDone = chapters.some((ch) => ch.status === "ocr_done");
@@ -225,6 +238,116 @@ export default function ProjectPage() {
 
   usePublishWebSocket(publishId, handlePublishMessage, handlePublishClose);
 
+  // ====== Auto Pilot ======
+  // Sahifa yuklanganda joriy AP'ni qayta ulash (reload-safe)
+  useEffect(() => {
+    if (!manga) return;
+    api.getActiveAutoPilot(manga).then((res) => {
+      if (res.active && res.auto_pilot_id) {
+        setAutoPilotId(res.auto_pilot_id);
+        if (res.state) {
+          setAutoPilotStage(res.state.current_stage);
+          setAutoPilotProgress(res.state.stage_progress);
+          setAutoPilotFailed(res.state.failed_chapters);
+        }
+      }
+    }).catch(() => {});
+  }, [manga]);
+
+  const handleAutoPilotMessage = useCallback((msg: WsMessage) => {
+    if (msg.type === "log" || msg.type === "stage_started" || msg.type === "stage_done") {
+      const stageMsg = msg as WsMessage & { stage?: string; chapter?: string; message: string; progress: number };
+      if (stageMsg.stage) setAutoPilotStage(stageMsg.stage);
+      if (typeof stageMsg.progress === "number") setAutoPilotProgress(stageMsg.progress);
+      if (stageMsg.message) setAutoPilotMessage(stageMsg.message);
+      const ch = (msg as { chapter?: string }).chapter;
+      if (ch) setAutoPilotChapter(ch);
+      else if (msg.type === "stage_started") setAutoPilotChapter(null);
+    } else if (msg.type === "done") {
+      const failed = (msg as { failed_chapters?: string[] }).failed_chapters || [];
+      const stages = (msg as { stages_completed?: string[] }).stages_completed || [];
+      if (failed.length > 0) {
+        toast.warning(`Auto Pilot: ${failed.length} bobda xatolik`);
+        setAutoPilotFailed(failed);
+      } else {
+        toast.success(`Auto Pilot tugadi (${stages.length} bosqich)`);
+      }
+      setAutoPilotId(null);
+      setAutoPilotStage(null);
+      setAutoPilotProgress(0);
+      setAutoPilotMessage("");
+      setAutoPilotChapter(null);
+      if (manga) {
+        api.getProject(manga).then(setProject).catch(() => {});
+      }
+    } else if (msg.type === "cancelled") {
+      toast.info("Auto Pilot to'xtatildi");
+      setAutoPilotId(null);
+      setAutoPilotStage(null);
+      setAutoPilotProgress(0);
+      setAutoPilotMessage("");
+      setAutoPilotChapter(null);
+      setAutoPilotStopping(false);
+      if (manga) {
+        api.getProject(manga).then(setProject).catch(() => {});
+      }
+    } else if (msg.type === "error") {
+      toast.error(`Auto Pilot xato: ${msg.message}`);
+      setAutoPilotId(null);
+      setAutoPilotStage(null);
+      setAutoPilotProgress(0);
+      setAutoPilotMessage("");
+      setAutoPilotChapter(null);
+      if (manga) {
+        api.getProject(manga).then(setProject).catch(() => {});
+      }
+    }
+  }, [manga]);
+
+  const handleAutoPilotClose = useCallback(() => {
+    // WS yopildi — final xabar kelmagan bo'lishi mumkin, holatni tozalash
+    setAutoPilotId(null);
+    setAutoPilotStage(null);
+    setAutoPilotProgress(0);
+    setAutoPilotMessage("");
+    setAutoPilotChapter(null);
+    setAutoPilotStopping(false);
+  }, []);
+
+  useAutoPilotWebSocket(autoPilotId, handleAutoPilotMessage, handleAutoPilotClose);
+
+  async function handleStartAutoPilot(config: AutoPilotConfig) {
+    if (!manga) return;
+    setAutoPilotStarting(true);
+    try {
+      const res = await api.startAutoPilot(manga, config);
+      setAutoPilotId(res.auto_pilot_id);
+      setAutoPilotStage(null);
+      setAutoPilotProgress(0);
+      setAutoPilotMessage("Auto Pilot boshlandi");
+      setAutoPilotChapter(null);
+      setAutoPilotFailed([]);
+      setAutoPilotModalOpen(false);
+      toast.success("Auto Pilot boshlandi");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setAutoPilotStarting(false);
+    }
+  }
+
+  async function handleStopAutoPilot() {
+    if (!autoPilotId) return;
+    setAutoPilotStopping(true);
+    try {
+      await api.stopAutoPilot(autoPilotId);
+      toast.info("Auto Pilot to'xtatilmoqda...");
+    } catch (e) {
+      toast.error((e as Error).message);
+      setAutoPilotStopping(false);
+    }
+  }
+
   async function handlePublishManga() {
     if (!manga) return;
     const displayName = project?.display_name || manga;
@@ -266,10 +389,25 @@ export default function ProjectPage() {
         hasTranslating={hasTranslating || translatingManga}
         hasPublishableChapters={hasPublishableChapters}
         isPublishing={isPublishing}
+        isAutoPiloting={autoPilotId !== null}
         onTranslate={handleTranslateManga}
         onPublish={handlePublishManga}
+        onAutoPilot={() => setAutoPilotModalOpen(true)}
         onDelete={handleDeleteProject}
       />
+
+      {/* Auto Pilot progress */}
+      {autoPilotId && (
+        <AutoPilotProgress
+          stage={autoPilotStage}
+          message={autoPilotMessage}
+          progress={autoPilotProgress}
+          currentChapter={autoPilotChapter}
+          failedChapters={autoPilotFailed}
+          onStop={handleStopAutoPilot}
+          stopping={autoPilotStopping}
+        />
+      )}
 
       {/* Publish progress bar */}
       {isPublishing && (
@@ -384,6 +522,13 @@ export default function ProjectPage() {
           }}
         />
       )}
+
+      <AutoPilotModal
+        open={autoPilotModalOpen}
+        starting={autoPilotStarting}
+        onClose={() => setAutoPilotModalOpen(false)}
+        onStart={handleStartAutoPilot}
+      />
     </div>
   );
 }
