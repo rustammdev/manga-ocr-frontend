@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
-import { X, Rocket, Loader2 } from "lucide-react";
+import { X, Rocket, Loader2, Crop } from "lucide-react";
 
 import type { AutoPilotConfig } from "../../lib/types";
 import { Button } from "../ui/button";
+import AdCropModal from "./AdCropModal";
 
 interface AutoPilotModalProps {
   open: boolean;
   starting: boolean;
+  manga: string;
   onClose: () => void;
   onStart: (config: AutoPilotConfig) => void;
 }
@@ -43,10 +45,12 @@ function loadConfig(): AutoPilotConfig {
 export default function AutoPilotModal({
   open,
   starting,
+  manga,
   onClose,
   onStart,
 }: AutoPilotModalProps) {
   const [config, setConfig] = useState<AutoPilotConfig>(loadConfig);
+  const [adCropOpen, setAdCropOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -123,6 +127,21 @@ export default function AutoPilotModal({
               checked={config.enable_auto_merge}
               onChange={(v) => update("enable_auto_merge", v)}
             />
+            {config.enable_auto_merge && (
+              <button
+                type="button"
+                onClick={() => setAdCropOpen(true)}
+                className="flex w-full items-center gap-2 rounded-md border border-dashed border-blue-500/40 bg-blue-500/5 px-3 py-2 text-left text-xs text-blue-700 transition-colors hover:bg-blue-500/10 dark:text-blue-300"
+              >
+                <Crop className="h-3.5 w-3.5" />
+                <div className="flex-1">
+                  <div className="font-medium">Reklama bannerlarini sozlash</div>
+                  <div className="text-[10px] opacity-80">
+                    Birinchi/oxirgi rasm uchun crop yoki butunlay tashlash
+                  </div>
+                </div>
+              </button>
+            )}
             <StageRow
               label="OCR"
               description="Matn aniqlash + tozalash"
@@ -202,6 +221,13 @@ export default function AutoPilotModal({
           </Button>
         </div>
       </div>
+
+      <AdCropModal
+        open={adCropOpen}
+        manga={manga}
+        confirmLabel="Saqlash"
+        onClose={() => setAdCropOpen(false)}
+      />
     </div>
   );
 }

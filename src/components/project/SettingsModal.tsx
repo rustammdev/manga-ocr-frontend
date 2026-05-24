@@ -178,62 +178,6 @@ export default function SettingsModal({
             />
             <span className="text-muted-foreground">Qora bubble aniqlash (dark bubble detection)</span>
           </label>
-          <div className="space-y-2 rounded-md border border-dashed border-blue-500/30 bg-blue-500/5 p-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-medium text-blue-500/80">Auto-merge: reklamalarni kesish</p>
-              <label className="flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  checked={(settings.crop_ads_top_px ?? 0) > 0 || (settings.crop_ads_bottom_px ?? 0) > 0}
-                  onChange={(e) => {
-                    const enabled = e.target.checked;
-                    setSettings((prev) => ({
-                      ...prev,
-                      crop_ads_top_px: enabled ? (prev.crop_ads_top_px || 30) : 0,
-                      crop_ads_bottom_px: enabled ? (prev.crop_ads_bottom_px || 30) : 0,
-                    }));
-                  }}
-                  className="rounded border-gray-300"
-                />
-                <span className="text-muted-foreground">Yoqilgan</span>
-              </label>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Auto-merge'dan oldin birinchi rasmning tepasidan va oxirgi rasmning pastidan reklama bo'laklarini kesib tashlaydi. Manual va Auto Pilot rejimlarida bir xil ishlaydi.
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">Tepa (px)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={500}
-                  value={settings.crop_ads_top_px ?? 0}
-                  onChange={(e) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      crop_ads_top_px: Math.max(0, Number.parseInt(e.target.value || "0", 10)),
-                    }))
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">Past (px)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={500}
-                  value={settings.crop_ads_bottom_px ?? 0}
-                  onChange={(e) =>
-                    setSettings((prev) => ({
-                      ...prev,
-                      crop_ads_bottom_px: Math.max(0, Number.parseInt(e.target.value || "0", 10)),
-                    }))
-                  }
-                />
-              </div>
-            </div>
-          </div>
           <div className="space-y-1.5 rounded-md border border-dashed border-amber-500/30 bg-amber-500/5 p-3">
             <p className="text-[11px] font-medium text-amber-500/80">Qayta ishlash</p>
             <label className="flex items-center gap-2 text-xs">

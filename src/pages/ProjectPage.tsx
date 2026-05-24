@@ -31,6 +31,10 @@ export default function ProjectPage() {
     detect_dark_bubbles: false,
     crop_ads_top_px: 0,
     crop_ads_bottom_px: 0,
+    drop_first_if_w: 0,
+    drop_first_if_h: 0,
+    drop_last_if_w: 0,
+    drop_last_if_h: 0,
   });
   const [saving, setSaving] = useState(false);
   const [editingSettings, setEditingSettings] = useState(false);
@@ -65,6 +69,10 @@ export default function ProjectPage() {
             detect_dark_bubbles: data.settings.detect_dark_bubbles ?? false,
             crop_ads_top_px: data.settings.crop_ads_top_px ?? 0,
             crop_ads_bottom_px: data.settings.crop_ads_bottom_px ?? 0,
+            drop_first_if_w: data.settings.drop_first_if_w ?? 0,
+            drop_first_if_h: data.settings.drop_first_if_h ?? 0,
+            drop_last_if_w: data.settings.drop_last_if_w ?? 0,
+            drop_last_if_h: data.settings.drop_last_if_h ?? 0,
           });
         }
         if (data.metadata) {
@@ -624,6 +632,7 @@ export default function ProjectPage() {
       <AutoPilotModal
         open={autoPilotModalOpen}
         starting={autoPilotStarting}
+        manga={manga!}
         onClose={() => setAutoPilotModalOpen(false)}
         onStart={handleStartAutoPilot}
       />

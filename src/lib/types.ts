@@ -126,6 +126,12 @@ export type ProjectSettings = {
   // Auto-merge'dan oldin reklamalarni kesish (px). 0 — kesilmaydi.
   crop_ads_top_px: number;
   crop_ads_bottom_px: number;
+  // Reklama bazida alohida rasm sifatida bo'lishi mumkin. Agar birinchi/oxirgi
+  // rasm aynan shu o'lchamda bo'lsa — butunlay tashlanadi. 0 — ishlamaydi.
+  drop_first_if_w: number;
+  drop_first_if_h: number;
+  drop_last_if_w: number;
+  drop_last_if_h: number;
 };
 
 export type TranslatorModelInfo = {
@@ -296,6 +302,29 @@ export type PageInfo = {
   image_url: string;
   width: number;
   height: number;
+};
+
+export type AdCropPreviewImage = {
+  filename: string;
+  image_url: string;
+  width: number;
+  height: number;
+};
+
+export type AdCropPreviewResponse = {
+  chapter: string | null;
+  first: AdCropPreviewImage | null;
+  last: AdCropPreviewImage | null;
+  common_size: { width: number; height: number } | null;
+  eligible_count: number;
+  current: {
+    crop_ads_top_px: number;
+    crop_ads_bottom_px: number;
+    drop_first_if_w: number;
+    drop_first_if_h: number;
+    drop_last_if_w: number;
+    drop_last_if_h: number;
+  };
 };
 
 export type UploadResponse = { manga: string; chapter: string; saved: number };

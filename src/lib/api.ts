@@ -1,4 +1,5 @@
 import type {
+  AdCropPreviewResponse,
   AutomationInfo,
   AutoPilotActiveResponse,
   AutoPilotConfig,
@@ -63,6 +64,11 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(settings),
     }).then(handle);
+  },
+  getAdCropPreview(slug: string): Promise<AdCropPreviewResponse> {
+    return fetch(
+      `/api/projects/${encodeURIComponent(slug)}/ad-crop-preview`,
+    ).then(handle<AdCropPreviewResponse>);
   },
   createProject(payload: ProjectCreateRequest): Promise<Project> {
     return fetch("/api/projects", {
@@ -129,12 +135,13 @@ export const api = {
     items: { folder: string; file: File }[],
   ): Promise<BulkUploadResponse> {
     const form = new FormData();
-    const folders: string[] = [];
+    // Har bir fayl o'zining "folder" qiymati bilan parallel yuboriladi.
+    // Backend ikki listni bir-biriga zip qiladi (uzunliklar bir xil
+    // bo'lishini browser FormData kafolatlaydi).
     for (const it of items) {
       form.append("files", it.file);
-      folders.push(it.folder);
+      form.append("folders", it.folder);
     }
-    form.append("folders", JSON.stringify(folders));
     return fetch(
       `/api/upload/bulk?manga_slug=${encodeURIComponent(slug)}`,
       { method: "POST", body: form }

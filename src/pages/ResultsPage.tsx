@@ -47,6 +47,10 @@ const DEFAULT_SETTINGS: ProjectSettings = {
   detect_dark_bubbles: false,
   crop_ads_top_px: 0,
   crop_ads_bottom_px: 0,
+  drop_first_if_w: 0,
+  drop_first_if_h: 0,
+  drop_last_if_w: 0,
+  drop_last_if_h: 0,
 };
 
 export default function ResultsPage() {
