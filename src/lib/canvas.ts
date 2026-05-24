@@ -102,20 +102,30 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
     // So'z soniga qarab max font chegarasi
     const wordCount = text.split(/\s+/).length;
     const maxFontByWords = wordCount <= 2 ? 48 : wordCount === 3 ? 42 : 36;
-    const MIN_FONT = 20;
+    const MIN_FONT = 10;
+    const PREFERRED_MIN = 16;
 
     let fontSize: number;
     if (r.font_size) {
       fontSize = r.font_size;
     } else {
-      fontSize = Math.floor(Math.min(maxFontByWords, Math.max(MIN_FONT, boxHeight * 0.45)));
+      fontSize = Math.floor(Math.min(maxFontByWords, Math.max(PREFERRED_MIN, boxHeight * 0.45)));
     }
     ctx.font = buildFontString(fontStyle, fontWeight, fontSize, fontFamily);
     let lines = wrapText(ctx, text, maxWidth);
     let lineHeight = Math.floor(fontSize * 1.2);
 
-    // Matn sig'maguncha font kichraytiriladi, lekin 20px dan pastga tushmaydi
-    while (fontSize > MIN_FONT && lines.length * lineHeight > maxHeight) {
+    // Vertikal yoki gorizontal sig'magunicha font kichraytiriladi (min 10px gacha).
+    // wrapText harflarga bo'lakdaydi, lekin baribir uzun harflar overflow berishi mumkin —
+    // gorizontal width'ni ham tekshiramiz.
+    const overflows = () => {
+      if (lines.length * lineHeight > maxHeight) return true;
+      for (const line of lines) {
+        if (ctx.measureText(line).width > maxWidth) return true;
+      }
+      return false;
+    };
+    while (fontSize > MIN_FONT && overflows()) {
       fontSize -= 1;
       lineHeight = Math.floor(fontSize * 1.2);
       ctx.font = buildFontString(fontStyle, fontWeight, fontSize, fontFamily);
