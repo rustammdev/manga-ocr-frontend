@@ -39,6 +39,7 @@ export default function OcrBackendSelect({ value, onValueChange }: OcrBackendSel
           <SelectItem value="auto">Local (Auto)</SelectItem>
           <SelectItem value="paddle">PaddleOCR</SelectItem>
           <SelectItem value="yolo_florence">YOLO + Florence-2</SelectItem>
+          <SelectItem value="yolo_gemini">YOLO + Gemini Vision</SelectItem>
           <SelectItem value="openai">OpenAI Vision</SelectItem>
           <SelectItem value="ollama">Ollama Vision</SelectItem>
         </SelectContent>

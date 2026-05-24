@@ -60,7 +60,7 @@ export type ProjectCreateRequest = {
   tags?: string[];
   language?: "ja" | "ko" | "ru" | "en";
   backend?: "openai" | "ollama" | "gemini";
-  ocr_backend?: "auto" | "openai" | "ollama" | "paddle" | "yolo_florence";
+  ocr_backend?: "auto" | "openai" | "ollama" | "paddle" | "yolo_florence" | "yolo_gemini";
   cleaner_backend?: CleanerBackendValue;
   inpaint_backend?: InpaintBackendValue;
   translator_model?: string;
@@ -117,7 +117,7 @@ export type InpaintBackendValue = "migan" | "lama";
 export type ProjectSettings = {
   language: "ja" | "ko" | "ru" | "en";
   backend: "openai" | "ollama" | "gemini";
-  ocr_backend: "auto" | "openai" | "ollama" | "paddle" | "yolo_florence";
+  ocr_backend: "auto" | "openai" | "ollama" | "paddle" | "yolo_florence" | "yolo_gemini";
   cleaner_backend: CleanerBackendValue;
   inpaint_backend: InpaintBackendValue;
   translator_model: string;
@@ -147,7 +147,7 @@ export type OcrBackendValue = ProjectSettings["ocr_backend"];
 export type OcrBackendInfo = {
   value: OcrBackendValue;
   label: string;
-  type: "local" | "api";
+  type: "local" | "api" | "hybrid";
   monthly_limit?: number;
   used?: number;
   remaining?: number;
