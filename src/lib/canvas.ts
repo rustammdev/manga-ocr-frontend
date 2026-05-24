@@ -45,37 +45,117 @@ function buildFontString(
 }
 
 /**
- * OCR bbox asosida rendering box hisoblaydi.
- * Agar bubble_bbox bor va OCR box ancha kichik bo'lsa,
- * OCR box ni bubble yo'nalishida biroz kattalashtiradi.
+ * OCR bbox asosida rendering box hisoblaydi (smart-expand).
+ *
+ * Strategiya backend `compute_render_bbox` bilan mos:
+ * 1. OCR box bubble area'ning yarmidan kam bo'lsa — kattalashtiriladi.
+ * 2. Default 50% nisbatida kengaytiriladi.
+ * 3. Matn berilgan bo'lsa, `preferredMinFont` (18px) da sig'maguncha
+ *    bubble yo'nalishida progressiv kengaytiriladi.
  */
+const PREFERRED_MIN_FONT = 18;
+const FILL_RATIO = 0.92;
+
+function expandBoxWithinBubble(
+  ocr: { x: number; y: number; w: number; h: number },
+  bubble: { x: number; y: number; w: number; h: number },
+  factor: number,
+): { x: number; y: number; w: number; h: number } {
+  const f = Math.max(0, Math.min(1, factor));
+  const dw = (bubble.w - ocr.w) * f;
+  const dh = (bubble.h - ocr.h) * f;
+  let x = Math.round(ocr.x - dw / 2);
+  let y = Math.round(ocr.y - dh / 2);
+  let w = Math.round(ocr.w + dw);
+  let h = Math.round(ocr.h + dh);
+  x = Math.max(bubble.x, x);
+  y = Math.max(bubble.y, y);
+  w = Math.min(bubble.x + bubble.w - x, w);
+  h = Math.min(bubble.y + bubble.h - y, h);
+  return { x, y, w: Math.max(1, w), h: Math.max(1, h) };
+}
+
+function textFitsInBox(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  fontSize: number,
+  fontFamily: string,
+  fontWeight: string,
+  fontStyle: string,
+  boxW: number,
+  boxH: number,
+): boolean {
+  const usableW = Math.floor(boxW * FILL_RATIO);
+  const usableH = Math.floor(boxH * FILL_RATIO);
+  if (usableW <= 0 || usableH <= 0) return false;
+  ctx.save();
+  ctx.font = buildFontString(fontStyle, fontWeight, fontSize, fontFamily);
+  const lines = wrapText(ctx, text, usableW);
+  const lineHeight = Math.floor(fontSize * 1.2);
+  let fits = lines.length * lineHeight <= usableH;
+  if (fits) {
+    for (const line of lines) {
+      if (ctx.measureText(line).width > usableW) {
+        fits = false;
+        break;
+      }
+    }
+  }
+  ctx.restore();
+  return fits;
+}
+
 function computeRenderBox(
+  ctx: CanvasRenderingContext2D,
   bbox: { x: number; y: number; w: number; h: number },
   bubbleBbox?: { x: number; y: number; w: number; h: number },
+  text?: string,
+  fontFamily: string = "Comic Neue",
+  fontWeight: string = "bold",
+  fontStyle: string = "normal",
 ): { x: number; y: number; w: number; h: number } {
-  if (!bubbleBbox) return bbox;
+  if (!bubbleBbox || bubbleBbox.w <= 0 || bubbleBbox.h <= 0) return bbox;
 
   const areaRatio = (bbox.w * bbox.h) / Math.max(1, bubbleBbox.w * bubbleBbox.h);
+  const needsExpand = areaRatio < 0.5;
 
-  // OCR box bubble ning 40% dan kam bo'lsa — biroz kattalashtirish
-  if (areaRatio >= 0.4) return bbox;
+  let box = needsExpand ? expandBoxWithinBubble(bbox, bubbleBbox, 0.5) : bbox;
 
-  const expandFactor = 0.3;
-  const dw = (bubbleBbox.w - bbox.w) * expandFactor;
-  const dh = (bubbleBbox.h - bbox.h) * expandFactor;
+  const measureText = (text || "").trim();
+  if (!measureText) return box;
 
-  let x = Math.round(bbox.x - dw / 2);
-  let y = Math.round(bbox.y - dh / 2);
-  let w = Math.round(bbox.w + dw);
-  let h = Math.round(bbox.h + dh);
+  // Matn `preferredMinFont` da sig'sa — shu bilan tugatiladi
+  if (textFitsInBox(ctx, measureText, PREFERRED_MIN_FONT, fontFamily, fontWeight, fontStyle, box.w, box.h)) {
+    return box;
+  }
 
-  // bubble chegarasidan chiqmasin
-  x = Math.max(bubbleBbox.x, x);
-  y = Math.max(bubbleBbox.y, y);
-  w = Math.min(bubbleBbox.x + bubbleBbox.w - x, w);
-  h = Math.min(bubbleBbox.y + bubbleBbox.h - y, h);
-
-  return { x, y, w, h };
+  // Sig'masa — bubble yo'nalishida binary search bilan kengaytirish
+  if (bubbleBbox.w <= bbox.w && bubbleBbox.h <= bbox.h) {
+    return box;
+  }
+  let lo = 0;
+  let hi = 1;
+  // hozirgi factor ni baholash
+  if (bubbleBbox.w > bbox.w) {
+    lo = Math.max(0, (box.w - bbox.w) / (bubbleBbox.w - bbox.w));
+  } else if (bubbleBbox.h > bbox.h) {
+    lo = Math.max(0, (box.h - bbox.h) / (bubbleBbox.h - bbox.h));
+  }
+  let best = expandBoxWithinBubble(bbox, bubbleBbox, hi);
+  if (!textFitsInBox(ctx, measureText, PREFERRED_MIN_FONT, fontFamily, fontWeight, fontStyle, best.w, best.h)) {
+    return best;
+  }
+  for (let i = 0; i < 8; i++) {
+    const mid = (lo + hi) / 2;
+    const candidate = expandBoxWithinBubble(bbox, bubbleBbox, mid);
+    if (textFitsInBox(ctx, measureText, PREFERRED_MIN_FONT, fontFamily, fontWeight, fontStyle, candidate.w, candidate.h)) {
+      best = candidate;
+      hi = mid;
+    } else {
+      lo = mid;
+    }
+  }
+  return best;
 }
 
 export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Region[]) {
@@ -87,23 +167,23 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
     const text = r.uz_text.toUpperCase().trim();
     if (!text) return;
 
-    // OCR bbox asosiy rendering box, zarur bo'lsa biroz kattalashtiriladi
-    const box = computeRenderBox(r.bbox, r.bubble_bbox);
+    const fontWeight = r.font_weight || "bold";
+    const fontStyle = r.font_style || "normal";
+    const fontFamily = r.font_family || "Comic Neue";
+
+    // OCR bbox asosiy rendering box, matnga moslab smart-expand qilinadi
+    const box = computeRenderBox(ctx, r.bbox, r.bubble_bbox, text, fontFamily, fontWeight, fontStyle);
     const padding = 4;
     const boxWidth = Math.max(10, box.w);
     const boxHeight = Math.max(10, box.h);
     const maxWidth = Math.max(10, boxWidth - padding * 2);
     const maxHeight = Math.max(10, boxHeight - padding * 2);
 
-    const fontWeight = r.font_weight || "bold";
-    const fontStyle = r.font_style || "normal";
-    const fontFamily = r.font_family || "Comic Neue";
-
     // So'z soniga qarab max font chegarasi
     const wordCount = text.split(/\s+/).length;
     const maxFontByWords = wordCount <= 2 ? 48 : wordCount === 3 ? 42 : 36;
     const MIN_FONT = 10;
-    const PREFERRED_MIN = 16;
+    const PREFERRED_MIN = PREFERRED_MIN_FONT;
 
     let fontSize: number;
     if (r.font_size) {
@@ -115,9 +195,10 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
     let lines = wrapText(ctx, text, maxWidth);
     let lineHeight = Math.floor(fontSize * 1.2);
 
-    // Vertikal yoki gorizontal sig'magunicha font kichraytiriladi (min 10px gacha).
-    // wrapText harflarga bo'lakdaydi, lekin baribir uzun harflar overflow berishi mumkin —
-    // gorizontal width'ni ham tekshiramiz.
+    // Vertikal yoki gorizontal sig'magunicha font kichraytiriladi.
+    // Smart-expand bilan box matnga moslangan, shuning uchun PREFERRED_MIN
+    // gacha tushish kerak emas, lekin uzun matn (7+ so'z) uchun absolyut
+    // minimum gacha tushish ruxsat etiladi.
     const overflows = () => {
       if (lines.length * lineHeight > maxHeight) return true;
       for (const line of lines) {
@@ -125,7 +206,8 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
       }
       return false;
     };
-    while (fontSize > MIN_FONT && overflows()) {
+    const minAllowed = wordCount <= 6 ? PREFERRED_MIN : MIN_FONT;
+    while (fontSize > minAllowed && overflows()) {
       fontSize -= 1;
       lineHeight = Math.floor(fontSize * 1.2);
       ctx.font = buildFontString(fontStyle, fontWeight, fontSize, fontFamily);
