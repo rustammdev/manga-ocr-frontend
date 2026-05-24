@@ -42,6 +42,10 @@ export default function ImagePositioner({
   const dragStartPos = useRef({ x: 0, y: 0 });
   const dragStartOffset = useRef({ x: 0, y: 0 });
 
+  // Wheel handler eng so'nggi offset/limit'larni o'qishi uchun ref orqali sinxron tutamiz.
+  const offsetRef = useRef({ x: 0, y: 0 });
+  const limitsRef = useRef({ mx: 0, my: 0 });
+
   const previewHeight = Math.round(previewWidth / aspectRatio);
 
   const computeLayout = useCallback(
@@ -59,12 +63,14 @@ export default function ImagePositioner({
       setScale(s);
       setMaxOffsetX(mox);
       setMaxOffsetY(moy);
+      limitsRef.current = { mx: mox, my: moy };
 
       // Markazga o'rnatish
       const ox = mox / 2;
       const oy = moy / 2;
       setOffsetX(ox);
       setOffsetY(oy);
+      offsetRef.current = { x: ox, y: oy };
 
       // Initial crop
       emitCrop(ox, oy, s, nw, nh);
@@ -117,6 +123,7 @@ export default function ImagePositioner({
 
       setOffsetX(newOx);
       setOffsetY(newOy);
+      offsetRef.current = { x: newOx, y: newOy };
     },
     [maxOffsetX, maxOffsetY],
   );
@@ -142,6 +149,52 @@ export default function ImagePositioner({
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [handleMouseMove, handleMouseUp]);
+
+  // Wheel/trackpad bilan oddiy scroll kabi siljitish.
+  // passive:false kerak — shunda preventDefault sahifa skrollini to'xtatadi.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      const { mx, my } = limitsRef.current;
+      if (mx <= 0 && my <= 0) return; // siljitishga joy yo'q
+
+      // deltaMode: 0 = pixel, 1 = line (~16px), 2 = page
+      const lineHeight = 16;
+      const factor = e.deltaMode === 1 ? lineHeight : e.deltaMode === 2 ? previewHeight : 1;
+      let dx = e.deltaX * factor;
+      let dy = e.deltaY * factor;
+
+      // Agar gorizontal o'q yo'q va shift bosilgan bo'lsa, vertikalni gorizontalga o'tkazamiz.
+      if (e.shiftKey && my <= 0) {
+        dx += dy;
+        dy = 0;
+      }
+      // Agar faqat vertikal limit bor bo'lsa — vertikal scroll vertikal siljitadi (allaqachon shunday).
+      // Agar faqat gorizontal limit bor bo'lsa — vertikal wheel'ni gorizontalga aylantiramiz.
+      if (mx > 0 && my <= 0 && dx === 0 && dy !== 0) {
+        dx = dy;
+        dy = 0;
+      }
+
+      const cur = offsetRef.current;
+      const newOx = Math.max(0, Math.min(mx, cur.x + dx));
+      const newOy = Math.max(0, Math.min(my, cur.y + dy));
+
+      // Faqat haqiqatan o'zgarish bo'lsa preventDefault qilamiz —
+      // chetga yetganda sahifa scroll'iga ruxsat beramiz.
+      if (newOx !== cur.x || newOy !== cur.y) {
+        e.preventDefault();
+        offsetRef.current = { x: newOx, y: newOy };
+        setOffsetX(newOx);
+        setOffsetY(newOy);
+      }
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [previewHeight]);
 
   const canDrag = maxOffsetX > 0 || maxOffsetY > 0;
 
@@ -172,7 +225,7 @@ export default function ImagePositioner({
       {canDrag && (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-1.5">
           <span className="rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-white/70">
-            Surib joylashtiring
+            Scroll yoki surib joylashtiring
           </span>
         </div>
       )}

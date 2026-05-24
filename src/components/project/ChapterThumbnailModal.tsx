@@ -122,7 +122,7 @@ export default function ChapterThumbnailModal({
                   Orqaga
                 </button>
                 <span className="text-xs text-muted-foreground">
-                  Rasmni surib joylashtiring
+                  Scroll yoki surib joylashtiring
                 </span>
               </div>
 
