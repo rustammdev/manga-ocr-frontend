@@ -56,7 +56,7 @@ export default function SettingsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
-        className="mx-4 w-full max-w-md rounded-lg border bg-card shadow-xl"
+        className="mx-4 w-full max-w-2xl rounded-lg border bg-card shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b px-5 py-3">

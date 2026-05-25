@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Play, Eye, Pencil, Loader2, Trash2, Scissors, ArrowUpDown, CheckCircle2, Circle, Upload, Cloud, CloudUpload, CloudOff, ImageIcon, Wand2 } from "lucide-react";
+import { Play, Eye, Pencil, Loader2, Trash2, Scissors, ArrowUpDown, CheckCircle2, Circle, Upload, Cloud, CloudUpload, CloudOff, ImageIcon, Wand2, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "../../lib/api";
@@ -111,6 +111,8 @@ export default function ChapterList({
   const [selectedPublished, setSelectedPublished] = useState<Set<string>>(new Set());
   const [unpublishing, setUnpublishing] = useState(false);
   const [autoMergingChapters, setAutoMergingChapters] = useState<Set<string>>(new Set());
+  const [publishedExpanded, setPublishedExpanded] = useState(false);
+  const [bulkValidating, setBulkValidating] = useState(false);
 
   async function handleAutoMerge(chapter: Chapter) {
     setAutoMergingChapters((prev) => {
@@ -177,18 +179,6 @@ export default function ChapterList({
     });
   }
 
-  function toggleSelectAll() {
-    const unpublishablePublished = chapters
-      .filter((chapter) => publishedChapters.includes(chapter.name) && !isRemoteR2Chapter(chapter))
-      .map((chapter) => chapter.name);
-
-    if (selectedPublished.size === unpublishablePublished.length) {
-      setSelectedPublished(new Set());
-    } else {
-      setSelectedPublished(new Set(unpublishablePublished));
-    }
-  }
-
   async function handleUnpublish() {
     const selected = Array.from(selectedPublished);
     if (!selected.length) return;
@@ -207,6 +197,57 @@ export default function ChapterList({
     }
   }
 
+  async function handleBulkToggleValidated() {
+    // Faqat publish qilinmagan boblarda ishlaymiz; publish qilinganlar tegmasligi shart.
+    const eligible = chapters.filter(
+      (ch) => !isRemoteR2Chapter(ch) && !publishedChapters.includes(ch.name)
+    );
+    if (eligible.length === 0) {
+      toast.info("Tasdiqlash uchun bob yo'q");
+      return;
+    }
+    // Agar barcha tegishli boblar allaqachon tasdiqlangan bo'lsa — barchasini olib tashlaymiz,
+    // aks holda tasdiqlanmaganlarni belgilaymiz.
+    const allValidated = eligible.every((ch) => ch.is_validated);
+    const targetVal = !allValidated;
+    const toUpdate = eligible.filter((ch) => Boolean(ch.is_validated) !== targetVal);
+    if (toUpdate.length === 0) {
+      toast.info("Yangilanish kerak emas");
+      return;
+    }
+
+    setBulkValidating(true);
+    // Optimistic update
+    const optimistic = chapters.map((ch) =>
+      toUpdate.some((u) => u.name === ch.name) ? { ...ch, is_validated: targetVal } : ch
+    );
+    onProjectUpdate({
+      slug: projectName,
+      display_name: projectName,
+      chapters: optimistic,
+      chapter_count: optimistic.length,
+    } as Project);
+
+    try {
+      await Promise.all(
+        toUpdate.map((ch) => api.updateChapterValidated(projectName, ch.name, targetVal))
+      );
+      toast.success(
+        targetVal
+          ? `${toUpdate.length} bob tasdiqlandi`
+          : `${toUpdate.length} bob tasdiqdan olindi`
+      );
+      const updated = await api.getProject(projectName);
+      onProjectUpdate(updated);
+    } catch (e) {
+      toast.error((e as Error).message);
+      const reverted = await api.getProject(projectName);
+      onProjectUpdate(reverted);
+    } finally {
+      setBulkValidating(false);
+    }
+  }
+
   const remoteChapters = chapters.filter(isRemoteR2Chapter);
   const localChapters = chapters.filter((chapter) => !isRemoteR2Chapter(chapter));
   const unpublishablePublished = localChapters
@@ -214,24 +255,58 @@ export default function ChapterList({
     .map((chapter) => chapter.name);
   const hasPublished = unpublishablePublished.length > 0;
 
+  // Lokal chapterlarni publish qilingan/qilinmaganga ajratamiz —
+  // publish qilinganlar ixchamroq strip-da, qolganlari ro'yxatda.
+  const publishedLocalChapters = localChapters.filter((chapter) =>
+    publishedChapters.includes(chapter.name)
+  );
+  const activeLocalChapters = localChapters.filter(
+    (chapter) => !publishedChapters.includes(chapter.name)
+  );
+
+  // Bulk validate uchun: faqat publish qilinmagan lokal boblar.
+  const bulkEligible = activeLocalChapters;
+  const bulkValidatedCount = bulkEligible.filter((ch) => ch.is_validated).length;
+  const bulkAllValidated = bulkEligible.length > 0 && bulkValidatedCount === bulkEligible.length;
+  const bulkSomeValidated = bulkValidatedCount > 0 && bulkValidatedCount < bulkEligible.length;
+
   return (
     <div className="min-w-0 xl:flex-1">
       <div className="rounded-lg border bg-card">
         <div className="flex items-center justify-between border-b px-5 py-3">
           <div className="flex items-center gap-3">
-            {hasPublished && (
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5 rounded border-muted-foreground/40 accent-orange-500 cursor-pointer"
-                checked={selectedPublished.size === unpublishablePublished.length && unpublishablePublished.length > 0}
-                onChange={toggleSelectAll}
-                title="Barchasini tanlash"
-              />
+            {bulkEligible.length > 0 && (
+              <button
+                type="button"
+                disabled={bulkValidating}
+                onClick={handleBulkToggleValidated}
+                title={
+                  bulkAllValidated
+                    ? "Barcha tasdiqlarni olib tashlash"
+                    : `Tasdiqlanmagan ${bulkEligible.length - bulkValidatedCount} bobni tasdiqlash`
+                }
+                className="flex items-center justify-center"
+              >
+                {bulkValidating ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : bulkAllValidated ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                ) : bulkSomeValidated ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500/50" />
+                ) : (
+                  <Circle className="h-4 w-4 text-muted-foreground/50 hover:text-muted-foreground" />
+                )}
+              </button>
             )}
             <span className="text-sm font-medium">Chapterlar</span>
             <span className="text-xs text-muted-foreground">
               {chapters.length} ta
               {remoteChapters.length > 0 ? `, ${remoteChapters.length} R2` : ""}
+              {bulkEligible.length > 0 && bulkValidatedCount > 0 && (
+                <span className="ml-1 text-emerald-500/80">
+                  · {bulkValidatedCount}/{bulkEligible.length} tasdiqlangan
+                </span>
+              )}
             </span>
           </div>
           {selectedPublished.size > 0 ? (
@@ -249,6 +324,17 @@ export default function ChapterList({
               )}
               Unpublish ({selectedPublished.size})
             </Button>
+          ) : hasPublished ? (
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedPublished(new Set(unpublishablePublished))
+              }
+              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              title="Barcha publish qilinganlarni tanlash"
+            >
+              {unpublishablePublished.length} publish
+            </button>
           ) : null}
         </div>
 
@@ -287,13 +373,80 @@ export default function ChapterList({
               </div>
             )}
 
-            {localChapters.length === 0 ? (
+            {publishedLocalChapters.length > 0 && (
+              <div className="border-b bg-emerald-500/[0.03] px-5 py-3">
+                <button
+                  className="flex w-full items-center gap-2 text-xs font-medium text-emerald-300 hover:text-emerald-200 transition-colors"
+                  onClick={() => setPublishedExpanded((v) => !v)}
+                >
+                  {publishedExpanded ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  )}
+                  <CloudUpload className="h-3.5 w-3.5" />
+                  Published
+                  <span className="text-muted-foreground font-normal">
+                    {publishedLocalChapters.length} bob
+                  </span>
+                  {selectedPublished.size > 0 && (
+                    <span className="ml-auto text-orange-400">
+                      {selectedPublished.size} tanlangan
+                    </span>
+                  )}
+                </button>
+                {!publishedExpanded ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {publishedLocalChapters.map((chapter) => {
+                      const selected = selectedPublished.has(chapter.name);
+                      return (
+                        <button
+                          key={chapter.name}
+                          className={`inline-flex h-7 items-center gap-1 rounded border px-2 text-[11px] transition-colors ${
+                            selected
+                              ? "border-orange-400/60 bg-orange-400/15 text-orange-200"
+                              : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200 hover:border-emerald-400/40"
+                          }`}
+                          title={`${chapter.name}-bob: ${chapter.image_count} rasm — klik: tanlash, dbl: ochish`}
+                          onClick={(e) => {
+                            if (e.shiftKey || e.metaKey || e.ctrlKey) {
+                              toggleSelect(chapter.name);
+                            } else {
+                              toggleSelect(chapter.name);
+                            }
+                          }}
+                          onDoubleClick={() => navigate(`/results/${projectName}/${chapter.name}`)}
+                        >
+                          {chapter.name}
+                          <span className="text-emerald-100/50">{chapter.image_count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-2 divide-y rounded border border-emerald-400/10">
+                    {publishedLocalChapters.map((chapter) => (
+                      <PublishedChapterRow
+                        key={chapter.name}
+                        chapter={chapter}
+                        projectName={projectName}
+                        selected={selectedPublished.has(chapter.name)}
+                        onToggleSelect={() => toggleSelect(chapter.name)}
+                        onOpen={() => navigate(`/results/${projectName}/${chapter.name}`)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeLocalChapters.length === 0 && publishedLocalChapters.length === 0 ? (
               <div className="p-6 text-center text-xs text-muted-foreground">
                 Lokal OCR/tarjima chapterlari yo'q.
               </div>
-            ) : (
+            ) : activeLocalChapters.length === 0 ? null : (
               <div className="divide-y">
-                {localChapters.map((chapter) => {
+                {activeLocalChapters.map((chapter) => {
               const isClickable = chapter.status === "done" || chapter.status === "ocr_done";
               const isPublished = publishedChapters.includes(chapter.name);
               return (
@@ -545,6 +698,52 @@ export default function ChapterList({
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+interface PublishedChapterRowProps {
+  chapter: Chapter;
+  projectName: string;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onOpen: () => void;
+}
+
+function PublishedChapterRow({
+  chapter,
+  projectName,
+  selected,
+  onToggleSelect,
+  onOpen,
+}: PublishedChapterRowProps) {
+  return (
+    <div
+      className="flex items-center gap-3 px-3 py-2 hover:bg-emerald-500/[0.04] cursor-pointer"
+      onClick={onOpen}
+    >
+      <input
+        type="checkbox"
+        className="h-3.5 w-3.5 flex-shrink-0 rounded border-muted-foreground/40 accent-orange-500 cursor-pointer"
+        checked={selected}
+        onChange={onToggleSelect}
+        onClick={(e) => e.stopPropagation()}
+      />
+      <span className="text-sm font-medium text-emerald-200">{chapter.name}-bob</span>
+      <span className="text-xs text-muted-foreground">{chapter.image_count} rasm</span>
+      <CloudUpload className="h-3 w-3 text-sky-400" />
+      <div className="ml-auto flex items-center gap-1">
+        <Link to={`/results/${projectName}/${chapter.name}`} onClick={(e) => e.stopPropagation()}>
+          <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs">
+            <Eye className="h-3 w-3" />
+          </Button>
+        </Link>
+        <Link to={`/edit/${projectName}/${chapter.name}`} onClick={(e) => e.stopPropagation()}>
+          <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs">
+            <Pencil className="h-3 w-3" />
+          </Button>
+        </Link>
       </div>
     </div>
   );
