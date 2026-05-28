@@ -116,6 +116,8 @@ export default function RerunOcrModal({
                   <SelectItem value="openai">OpenAI</SelectItem>
                   <SelectItem value="ollama">Ollama (Local)</SelectItem>
                   <SelectItem value="gemini">Gemini</SelectItem>
+                  <SelectItem value="anthropic">Anthropic</SelectItem>
+                  <SelectItem value="kiro">Kiro (Amazon Q)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

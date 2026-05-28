@@ -44,7 +44,7 @@ export default function NewProjectPage() {
   const [scheduleDays, setScheduleDays] = useState<ScheduleDay[]>([]);
   const [authors, setAuthors] = useState<AuthorEntry[]>([]);
   const [language, setLanguage] = useState<"ja" | "ko" | "ru" | "en">("en");
-  const [backend, setBackend] = useState<"openai" | "ollama" | "gemini">("gemini");
+  const [backend, setBackend] = useState<"openai" | "ollama" | "gemini" | "anthropic" | "kiro">("gemini");
   const [ocrBackend, setOcrBackend] = useState<OcrBackendValue>("apple_vision");
   const [inpaintBackend, setInpaintBackend] = useState<InpaintBackendValue>("opencv");
   const [translatorModel, setTranslatorModel] = useState("");
@@ -293,6 +293,8 @@ export default function NewProjectPage() {
                 <SelectItem value="openai">OpenAI</SelectItem>
                 <SelectItem value="ollama">Ollama (Local)</SelectItem>
                 <SelectItem value="gemini">Gemini</SelectItem>
+                <SelectItem value="anthropic">Anthropic</SelectItem>
+                <SelectItem value="kiro">Kiro (Amazon Q)</SelectItem>
               </SelectContent>
             </Select>
           </div>

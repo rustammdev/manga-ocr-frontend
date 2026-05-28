@@ -86,7 +86,7 @@ export type ProjectCreateRequest = {
   alt_titles?: string[];
   schedule_days?: ScheduleDay[];
   language?: "ja" | "ko" | "ru" | "en";
-  backend?: "openai" | "ollama" | "gemini";
+  backend?: "openai" | "ollama" | "gemini" | "anthropic" | "kiro";
   ocr_backend?: "auto" | "openai" | "ollama" | "paddle" | "yolo_florence" | "yolo_gemini" | "apple_vision";
   cleaner_backend?: CleanerBackendValue;
   inpaint_backend?: InpaintBackendValue;
@@ -150,7 +150,7 @@ export type InpaintBackendValue = "opencv" | "migan" | "lama";
 
 export type ProjectSettings = {
   language: "ja" | "ko" | "ru" | "en";
-  backend: "openai" | "ollama" | "gemini";
+  backend: "openai" | "ollama" | "gemini" | "anthropic" | "kiro";
   ocr_backend: "auto" | "openai" | "ollama" | "paddle" | "yolo_florence" | "yolo_gemini" | "apple_vision";
   cleaner_backend: CleanerBackendValue;
   inpaint_backend: InpaintBackendValue;
