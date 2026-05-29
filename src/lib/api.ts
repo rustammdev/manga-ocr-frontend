@@ -26,6 +26,8 @@ import type {
   MangaLibDownloadRequest,
   MangaLibDownloadResponse,
   MangaLibSeries,
+  MangaLibTokenStatus,
+  MangaLibTokenSaveRequest,
   OcrBackendInfo,
   InpaintBackendInfo,
   PageInfo,
@@ -561,6 +563,37 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     }).then(handle<MangaLibDownloadResponse>);
+  },
+
+  // Global 18+ auth token (resolve/attach/sync/download'ga avtomat qo'shiladi).
+  getMangaLibToken(): Promise<MangaLibTokenStatus> {
+    return fetch("/api/mangalib/token").then(handle<MangaLibTokenStatus>);
+  },
+  saveMangaLibToken(payload: MangaLibTokenSaveRequest): Promise<{ ok: boolean }> {
+    return fetch("/api/mangalib/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then(handle<{ ok: boolean }>);
+  },
+  // Foydalanuvchi DevTools'dan copy qilgan matnni xom holda yuboradi. Matn
+  // butun auth blok JSON'i ({"access_token":...}) bo'lsa o'zgartirilmasdan,
+  // oddiy "ey..." token bo'lsa {token,user_label} sifatida yuboriladi.
+  saveMangaLibTokenRaw(text: string): Promise<{ ok: boolean }> {
+    const value = text.trim();
+    const body = value.startsWith("{")
+      ? value
+      : JSON.stringify({ token: value, user_label: "manual" });
+    return fetch("/api/mangalib/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+    }).then(handle<{ ok: boolean }>);
+  },
+  deleteMangaLibToken(): Promise<{ ok: boolean }> {
+    return fetch("/api/mangalib/token", {
+      method: "DELETE",
+    }).then(handle<{ ok: boolean }>);
   },
 
   startAutoPilot(manga: string, config: AutoPilotConfig): Promise<AutoPilotStartResponse> {

@@ -226,9 +226,14 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
       ctx.rotate(rot * Math.PI / 180);
       ctx.translate(-cx, -cy);
     }
-    ctx.beginPath();
-    ctx.rect(box.x, box.y, boxWidth, boxHeight);
-    ctx.clip();
+    // Faqat burchaksiz matnda clip qilamiz — backend renderer burilgan matnni
+    // alohida layer'da expand=True bilan chizadi (kesmaydi). Editor preview va
+    // publish natijasi bir xil bo'lishi uchun burchakli regionда clip o'chiriladi.
+    if (!rot) {
+      ctx.beginPath();
+      ctx.rect(box.x, box.y, boxWidth, boxHeight);
+      ctx.clip();
+    }
     const fontColor = r.font_color || "#111827";
     const strokeColor = r.font_stroke_color || "";
     const strokeWidth = r.font_stroke_width || 0;

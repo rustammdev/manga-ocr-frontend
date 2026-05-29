@@ -269,7 +269,7 @@ const RegionItem = memo(function RegionItem({
             <Minus className="h-2.5 w-2.5" />
           </button>
           <span className="min-w-[22px] text-center text-[10px] tabular-nums">
-            {draftRotation}°
+            {Math.round(draftRotation)}°
           </span>
           <button
             className="flex h-5 w-5 items-center justify-center rounded border bg-background text-muted-foreground transition-colors hover:text-foreground"

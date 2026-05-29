@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Cloud, Loader2, Plus } from "lucide-react";
+import { Cloud, KeyRound, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "../lib/api";
@@ -8,25 +8,50 @@ import type { Project, Stats } from "../lib/types";
 import { Button } from "../components/ui/button";
 import StatsCards from "../components/dashboard/StatsCards";
 import FolderView from "../components/dashboard/FolderView";
+import MangaLibTokenModal from "../components/project/MangaLibTokenModal";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [syncingR2, setSyncingR2] = useState(false);
+  const [tokenOpen, setTokenOpen] = useState(false);
+  const [tokenConnected, setTokenConnected] = useState(false);
+
+  useEffect(() => {
+    // Global 18+ token holati — header indikatori uchun.
+    api
+      .getMangaLibToken()
+      .then((res) => setTokenConnected(res.connected === true))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     let active = true;
-    Promise.all([api.getStats(), api.getProjects()])
-      .then(([statsData, projectsData]) => {
+
+    // Manga ro'yxati birinchi va mustaqil yuklanadi — statistika kutilmaydi.
+    api
+      .getProjects()
+      .then((projectsData) => {
         if (!active) return;
-        setStats(statsData);
         setProjects(projectsData);
       })
       .catch((err) => {
         if (!active) return;
         setError(err.message || "Xatolik");
       });
+
+    // Statistika orqa fonda yuklanadi va mangalar ko'rsatilishiga to'sqinlik qilmaydi.
+    api
+      .getStats()
+      .then((statsData) => {
+        if (!active) return;
+        setStats(statsData);
+      })
+      .catch(() => {
+        /* statistika xatosi mangalar ro'yxatiga ta'sir qilmaydi */
+      });
+
     return () => {
       active = false;
     };
@@ -89,6 +114,25 @@ export default function DashboardPage() {
             size="sm"
             variant="outline"
             className="gap-1.5"
+            onClick={() => setTokenOpen(true)}
+            title={
+              tokenConnected
+                ? "MangaLib token ulangan (18+)"
+                : "MangaLib token ulanmagan"
+            }
+          >
+            <KeyRound className="h-3.5 w-3.5" />
+            MangaLib token
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                tokenConnected ? "bg-emerald-500" : "bg-muted-foreground/40"
+              }`}
+            />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
             disabled={syncingR2}
             onClick={handleR2Sync}
           >
@@ -110,6 +154,12 @@ export default function DashboardPage() {
 
       <StatsCards stats={stats} />
       <FolderView projects={projects} error={error} />
+
+      <MangaLibTokenModal
+        open={tokenOpen}
+        onClose={() => setTokenOpen(false)}
+        onChanged={(s) => setTokenConnected(s.connected === true)}
+      />
     </div>
   );
 }

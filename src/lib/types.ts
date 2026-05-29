@@ -627,3 +627,20 @@ export type MangaLibDownloadResponse = {
   job_ids: string[];
   total: number;
 };
+
+// Global 18+ auth token (DB da `_id="global"` saqlanadi). API hech qachon
+// to'liq tokenni qaytarmaydi — faqat `token_hint`.
+export type MangaLibTokenStatus =
+  | {
+      connected: true;
+      expires_at: string | null;
+      updated_at: string;
+      user_label: string;
+      token_hint: string;
+    }
+  | { connected: false };
+
+export type MangaLibTokenSaveRequest = {
+  token: string;
+  user_label?: string;
+};
