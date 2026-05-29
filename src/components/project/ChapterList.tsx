@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Play, Eye, Pencil, Loader2, Trash2, Scissors, ArrowUpDown, CheckCircle2, Circle, Upload, Cloud, CloudUpload, CloudOff, ImageIcon, Wand2, ChevronDown, ChevronRight } from "lucide-react";
+import { Play, Eye, Pencil, Loader2, Trash2, Scissors, ArrowUpDown, CheckCircle2, Circle, Upload, Cloud, CloudUpload, CloudOff, ImageIcon, Wand2, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "../../lib/api";
@@ -79,6 +79,23 @@ function totalTimingSec(timings: Record<string, number> | undefined): number {
 
 function isRemoteR2Chapter(chapter: Chapter) {
   return chapter.remote || chapter.source === "r2";
+}
+
+/**
+ * Bob "tarjima qilingan" deb belgilangan, lekin uz_text bo'lmagan regionlar borligini aniqlaydi.
+ * Backend bobni `done` deb yozadi agarda hech bo'lmasa bitta region tarjima qilingan bo'lsa,
+ * shuning uchun bu yerda total/translated farqi orqali yarim tarjimani topamiz.
+ */
+function translationGap(chapter: Chapter): { missing: number; total: number } | null {
+  const total = chapter.total_regions ?? 0;
+  const translated = chapter.translated_regions ?? 0;
+  if (total <= 0) return null;
+  const missing = total - translated;
+  if (missing <= 0) return null;
+  // Faqat tarjima bosqichi ishlagan boblarda warning ko'rsatamiz.
+  // OCR tugagan, tarjima hech boshlanmagan boblarda — bu normal holat, warning shart emas.
+  if (translated === 0) return null;
+  return { missing, total };
 }
 
 interface ChapterListProps {
@@ -275,6 +292,12 @@ export default function ChapterList({
   const bulkAllValidated = bulkEligible.length > 0 && bulkValidatedCount === bulkEligible.length;
   const bulkSomeValidated = bulkValidatedCount > 0 && bulkValidatedCount < bulkEligible.length;
 
+  // Yarim tarjima bo'lgan (uz_text bo'sh regionlari bor) lokal boblar — diqqatga olish.
+  const incompleteChapters = localChapters
+    .map((ch) => ({ chapter: ch, gap: translationGap(ch) }))
+    .filter((x): x is { chapter: Chapter; gap: { missing: number; total: number } } => x.gap !== null);
+  const incompleteMissingTotal = incompleteChapters.reduce((acc, x) => acc + x.gap.missing, 0);
+
   return (
     <div className="min-w-0 xl:flex-1">
       <div className="rounded-lg border bg-card">
@@ -343,6 +366,25 @@ export default function ChapterList({
           ) : null}
         </div>
 
+        {incompleteChapters.length > 0 && (
+          <div className="flex items-start gap-2 border-b border-red-500/20 bg-red-500/[0.05] px-5 py-2.5 text-xs">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-red-400" />
+            <div className="min-w-0 flex-1">
+              <div className="font-medium text-red-300">
+                {incompleteChapters.length} bobda tarjima yarim qolgan
+              </div>
+              <div className="mt-0.5 text-red-300/70">
+                Jami {incompleteMissingTotal} ta region tarjimasiz: {" "}
+                {incompleteChapters
+                  .slice(0, 8)
+                  .map((x) => `${x.chapter.name} (${x.gap.missing})`)
+                  .join(", ")}
+                {incompleteChapters.length > 8 ? ` va yana ${incompleteChapters.length - 8} ta` : ""}
+              </div>
+            </div>
+          </div>
+        )}
+
         {chapters.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 text-center">
             <p className="text-sm text-muted-foreground">Chapter topilmadi</p>
@@ -404,15 +446,22 @@ export default function ChapterList({
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {publishedLocalChapters.map((chapter) => {
                       const selected = selectedPublished.has(chapter.name);
+                      const chipGap = translationGap(chapter);
                       return (
                         <button
                           key={chapter.name}
                           className={`inline-flex h-7 items-center gap-1 rounded border px-2 text-[11px] transition-colors ${
                             selected
                               ? "border-orange-400/60 bg-orange-400/15 text-orange-200"
-                              : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200 hover:border-emerald-400/40"
+                              : chipGap
+                                ? "border-red-400/40 bg-red-400/10 text-red-200 hover:border-red-400/60"
+                                : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200 hover:border-emerald-400/40"
                           }`}
-                          title={`${chapter.name}-bob: ${chapter.image_count} rasm — klik: tanlash, dbl: ochish`}
+                          title={
+                            chipGap
+                              ? `${chapter.name}-bob: ${chipGap.missing} region tarjimasiz (${chapter.image_count} rasm)`
+                              : `${chapter.name}-bob: ${chapter.image_count} rasm — klik: tanlash, dbl: ochish`
+                          }
                           onClick={(e) => {
                             if (e.shiftKey || e.metaKey || e.ctrlKey) {
                               toggleSelect(chapter.name);
@@ -422,8 +471,11 @@ export default function ChapterList({
                           }}
                           onDoubleClick={() => navigate(`/results/${projectName}/${chapter.name}`)}
                         >
+                          {chipGap && <AlertTriangle className="h-3 w-3 text-red-300" />}
                           {chapter.name}
-                          <span className="text-emerald-100/50">{chapter.image_count}</span>
+                          <span className={chipGap ? "text-red-100/60" : "text-emerald-100/50"}>
+                            {chipGap ? chipGap.missing : chapter.image_count}
+                          </span>
                         </button>
                       );
                     })}
@@ -454,10 +506,13 @@ export default function ChapterList({
                 {activeLocalChapters.map((chapter) => {
               const isClickable = chapter.status === "done" || chapter.status === "ocr_done";
               const isPublished = publishedChapters.includes(chapter.name);
+              const gap = translationGap(chapter);
               return (
                 <div
                   key={chapter.name}
                   className={`flex items-center justify-between gap-4 px-5 py-4 ${
+                    gap ? "bg-red-500/[0.04] border-l-2 border-red-500/60" : ""
+                  } ${
                     isClickable ? "cursor-pointer transition-colors hover:bg-muted/50" : ""
                   }`}
                   onClick={() => {
@@ -535,6 +590,15 @@ export default function ChapterList({
                     <Badge variant={chapterBadgeVariant(chapter)}>
                       {chapterBadgeLabel(chapter)}
                     </Badge>
+                    {gap && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-300"
+                        title={`Tarjima yarim: ${gap.total - gap.missing}/${gap.total} region tarjima qilingan, ${gap.missing} ta uz_text yo'q`}
+                      >
+                        <AlertTriangle className="h-3 w-3" />
+                        {gap.missing} tarjima yo'q
+                      </span>
+                    )}
                     {isPublished && (
                       <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-sky-400" title="Published">
                         <CloudUpload className="h-3 w-3" />
@@ -723,9 +787,12 @@ function PublishedChapterRow({
   onToggleSelect,
   onOpen,
 }: PublishedChapterRowProps) {
+  const gap = translationGap(chapter);
   return (
     <div
-      className="flex items-center gap-3 px-3 py-2 hover:bg-emerald-500/[0.04] cursor-pointer"
+      className={`flex items-center gap-3 px-3 py-2 cursor-pointer ${
+        gap ? "bg-red-500/[0.05] hover:bg-red-500/[0.08]" : "hover:bg-emerald-500/[0.04]"
+      }`}
       onClick={onOpen}
     >
       <input
@@ -738,6 +805,15 @@ function PublishedChapterRow({
       <span className="text-sm font-medium text-emerald-200">{chapter.name}-bob</span>
       <span className="text-xs text-muted-foreground">{chapter.image_count} rasm</span>
       <CloudUpload className="h-3 w-3 text-sky-400" />
+      {gap && (
+        <span
+          className="inline-flex items-center gap-1 rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-300"
+          title={`Tarjima yarim: ${gap.total - gap.missing}/${gap.total}, ${gap.missing} ta uz_text yo'q`}
+        >
+          <AlertTriangle className="h-3 w-3" />
+          {gap.missing}
+        </span>
+      )}
       <div className="ml-auto flex items-center gap-1">
         <Link to={`/results/${projectName}/${chapter.name}`} onClick={(e) => e.stopPropagation()}>
           <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs">

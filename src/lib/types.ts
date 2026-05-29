@@ -22,6 +22,9 @@ export type Chapter = {
   published_page_count?: number;
   auto_merged?: boolean;
   timings?: Record<string, number>;
+  // Tarjima statistikasi — yarim tarjima qilingan boblarni aniqlash uchun.
+  total_regions?: number;
+  translated_regions?: number;
 };
 
 export type AuthorRole = "story" | "art" | "original" | "story_art";
