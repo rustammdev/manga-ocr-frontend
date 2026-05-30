@@ -98,6 +98,30 @@ function translationGap(chapter: Chapter): { missing: number; total: number } | 
   return { missing, total };
 }
 
+/**
+ * Boblar raqamlari ketma-ketligida tushib qolgan butun sonlarni topadi.
+ * Masalan boblar [1, 2, 4, 5] bo'lsa — 3-bob yo'q.
+ * Barcha boblar (lokal + R2 + published) hisobga olinadi, chunki ular ham "mavjud" bob.
+ * Kasrli (bonus) boblar (masalan 5.5) butun slotni qoplaydi — 5 mavjud deb hisoblanadi.
+ */
+function findMissingChapterNumbers(chapters: Chapter[]): number[] {
+  const present = new Set<number>();
+  for (const ch of chapters) {
+    const n = parseFloat(ch.name);
+    if (Number.isNaN(n)) continue;
+    present.add(Math.floor(n));
+  }
+  if (present.size < 2) return [];
+  const nums = Array.from(present).sort((a, b) => a - b);
+  const min = nums[0];
+  const max = nums[nums.length - 1];
+  const missing: number[] = [];
+  for (let i = min; i <= max; i++) {
+    if (!present.has(i)) missing.push(i);
+  }
+  return missing;
+}
+
 interface ChapterListProps {
   chapters: Chapter[];
   projectName: string;
@@ -106,6 +130,7 @@ interface ChapterListProps {
   forceClean: boolean;
   publishedChapters: string[];
   publishingTarget: "manga" | string | null;
+  project: Project | null;
   onProjectUpdate: (project: Project) => void;
   onPublishChapter: (chapter: string) => void;
   onSetThumbnail: (chapter: string) => void;
@@ -119,6 +144,7 @@ export default function ChapterList({
   forceClean,
   publishedChapters,
   publishingTarget,
+  project,
   onProjectUpdate,
   onPublishChapter,
   onSetThumbnail,
@@ -238,16 +264,18 @@ export default function ChapterList({
     }
 
     setBulkValidating(true);
-    // Optimistic update
+    // Optimistic update — to'liq project obyektini saqlaymiz (published_chapters
+    // va boshqa maydonlar yo'qolmasligi uchun), faqat chapters'ni yangilaymiz.
     const optimistic = chapters.map((ch) =>
       toUpdate.some((u) => u.name === ch.name) ? { ...ch, is_validated: targetVal } : ch
     );
     onProjectUpdate({
-      slug: projectName,
-      display_name: projectName,
+      ...(project as Project),
+      slug: project?.slug ?? projectName,
+      display_name: project?.display_name ?? projectName,
       chapters: optimistic,
       chapter_count: optimistic.length,
-    } as Project);
+    });
 
     try {
       await Promise.all(
@@ -297,6 +325,10 @@ export default function ChapterList({
     .map((ch) => ({ chapter: ch, gap: translationGap(ch) }))
     .filter((x): x is { chapter: Chapter; gap: { missing: number; total: number } } => x.gap !== null);
   const incompleteMissingTotal = incompleteChapters.reduce((acc, x) => acc + x.gap.missing, 0);
+
+  // Boblar raqamlari orasida tushib qolgan boblar (masalan 1, 2, 4 — 3 yo'q).
+  // Barcha boblarni (lokal + R2 + published) hisobga olamiz.
+  const missingChapterNumbers = findMissingChapterNumbers(chapters);
 
   return (
     <div className="min-w-0 xl:flex-1">
@@ -380,6 +412,24 @@ export default function ChapterList({
                   .map((x) => `${x.chapter.name} (${x.gap.missing})`)
                   .join(", ")}
                 {incompleteChapters.length > 8 ? ` va yana ${incompleteChapters.length - 8} ta` : ""}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {missingChapterNumbers.length > 0 && (
+          <div className="flex items-start gap-2 border-b border-amber-500/20 bg-amber-500/[0.05] px-5 py-2.5 text-xs">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-400" />
+            <div className="min-w-0 flex-1">
+              <div className="font-medium text-amber-300">
+                {missingChapterNumbers.length} ta bob tushib qolgan
+              </div>
+              <div className="mt-0.5 text-amber-300/70">
+                Boblar ketma-ketligida yo'q: {" "}
+                {missingChapterNumbers.slice(0, 15).join(", ")}
+                {missingChapterNumbers.length > 15
+                  ? ` va yana ${missingChapterNumbers.length - 15} ta`
+                  : ""}
               </div>
             </div>
           </div>
@@ -539,12 +589,17 @@ export default function ChapterList({
                         onClick={async (e) => {
                           e.stopPropagation();
                           const newVal = !chapter.is_validated;
-                          // Optimistic update
+                          // Optimistic update — to'liq project obyektini saqlaymiz,
+                          // aks holda published_chapters yo'qolib, Published bo'limi yopilib qoladi.
                           const updatedChapters = chapters.map((ch) =>
                             ch.name === chapter.name ? { ...ch, is_validated: newVal } : ch
                           );
                           onProjectUpdate({
-                            ...({ slug: projectName, display_name: projectName, chapters: updatedChapters, chapter_count: updatedChapters.length } as Project),
+                            ...(project as Project),
+                            slug: project?.slug ?? projectName,
+                            display_name: project?.display_name ?? projectName,
+                            chapters: updatedChapters,
+                            chapter_count: updatedChapters.length,
                           });
                           try {
                             await api.updateChapterValidated(projectName, chapter.name, newVal);

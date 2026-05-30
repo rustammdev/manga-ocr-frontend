@@ -182,7 +182,7 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
     // So'z soniga qarab max font chegarasi
     const wordCount = text.split(/\s+/).length;
     const maxFontByWords = wordCount <= 2 ? 48 : wordCount === 3 ? 42 : 36;
-    const MIN_FONT = 10;
+    const MIN_FONT = 8;
     const PREFERRED_MIN = PREFERRED_MIN_FONT;
 
     let fontSize: number;
@@ -196,9 +196,8 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
     let lineHeight = Math.floor(fontSize * 1.2);
 
     // Vertikal yoki gorizontal sig'magunicha font kichraytiriladi.
-    // Smart-expand bilan box matnga moslangan, shuning uchun PREFERRED_MIN
-    // gacha tushish kerak emas, lekin uzun matn (7+ so'z) uchun absolyut
-    // minimum gacha tushish ruxsat etiladi.
+    // Matn box ichiga to'liq sig'ishi shart — aks holda clip uni
+    // yashiradi va o'quvchi matnning bir qismini ko'rmaydi.
     const overflows = () => {
       if (lines.length * lineHeight > maxHeight) return true;
       for (const line of lines) {
@@ -206,7 +205,11 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
       }
       return false;
     };
-    const minAllowed = wordCount <= 6 ? PREFERRED_MIN : MIN_FONT;
+    // Matn box ichiga sig'maguncha font kichraytiriladi (backend
+    // renderer bilan mos). PREFERRED_MIN faqat boshlang'ich tavsiya;
+    // matn sig'masa, clip uni yashirmasligi uchun absolyut minimumgacha
+    // tushishga ruxsat beriladi.
+    const minAllowed = MIN_FONT;
     while (fontSize > minAllowed && overflows()) {
       fontSize -= 1;
       lineHeight = Math.floor(fontSize * 1.2);

@@ -790,6 +790,7 @@ export default function ProjectPage() {
           forceClean={forceClean}
           publishedChapters={publishedChapters}
           publishingTarget={publishingTarget}
+          project={project}
           onProjectUpdate={setProject}
           onPublishChapter={handlePublishChapter}
           onSetThumbnail={(ch) => setThumbnailModalChapter(ch)}
