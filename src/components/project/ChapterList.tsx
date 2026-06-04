@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { api } from "../../lib/api";
 import type { Chapter, Project, ProjectSettings } from "../../lib/types";
+import { chapterLabel } from "../../lib/utils";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 
@@ -107,7 +108,7 @@ function translationGap(chapter: Chapter): { missing: number; total: number } | 
 function findMissingChapterNumbers(chapters: Chapter[]): number[] {
   const present = new Set<number>();
   for (const ch of chapters) {
-    const n = parseFloat(ch.name);
+    const n = parseFloat(ch.name.replace("_", "."));
     if (Number.isNaN(n)) continue;
     present.add(Math.floor(n));
   }
@@ -460,7 +461,7 @@ export default function ChapterList({
                       className="inline-flex h-7 items-center gap-1 rounded border border-sky-400/20 bg-sky-400/10 px-2 text-[11px] text-sky-200"
                       title={`${chapter.r2_chapter_key || chapter.name}: ${chapter.published_page_count || chapter.image_count} sahifa`}
                     >
-                      {chapter.name}
+                      {chapterLabel(chapter.name)}
                       <span className="text-sky-100/60">
                         {chapter.published_page_count || chapter.image_count}
                       </span>
@@ -522,7 +523,7 @@ export default function ChapterList({
                           onDoubleClick={() => navigate(`/results/${projectName}/${chapter.name}`)}
                         >
                           {chipGap && <AlertTriangle className="h-3 w-3 text-red-300" />}
-                          {chapter.name}
+                          {chapterLabel(chapter.name)}
                           <span className={chipGap ? "text-red-100/60" : "text-emerald-100/50"}>
                             {chipGap ? chipGap.missing : chapter.image_count}
                           </span>
@@ -639,7 +640,7 @@ export default function ChapterList({
                       )}
                     </button>
                     <div>
-                      <div className="text-sm font-medium">{chapter.name}-bob</div>
+                      <div className="text-sm font-medium">{chapterLabel(chapter.name)}-bob</div>
                       <div className="text-xs text-muted-foreground">{chapter.image_count} rasm</div>
                     </div>
                     <Badge variant={chapterBadgeVariant(chapter)}>
@@ -857,7 +858,7 @@ function PublishedChapterRow({
         onChange={onToggleSelect}
         onClick={(e) => e.stopPropagation()}
       />
-      <span className="text-sm font-medium text-emerald-200">{chapter.name}-bob</span>
+      <span className="text-sm font-medium text-emerald-200">{chapterLabel(chapter.name)}-bob</span>
       <span className="text-xs text-muted-foreground">{chapter.image_count} rasm</span>
       <CloudUpload className="h-3 w-3 text-sky-400" />
       {gap && (

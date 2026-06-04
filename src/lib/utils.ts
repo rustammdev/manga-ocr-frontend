@@ -26,3 +26,12 @@ export function clamp(n: number, min: number, max: number) {
 export function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+
+/**
+ * Bob nomini ko'rsatish uchun formatlaydi: kasr ajratuvchi '_' -> '.'.
+ * Masalan "010_1" -> "010.1", "005" -> "005".
+ * Nom marshrut/identifikator sifatida o'zgarmaydi — faqat ko'rsatish uchun.
+ */
+export function chapterLabel(name: string): string {
+  return name.replace("_", ".");
+}

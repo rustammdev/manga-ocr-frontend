@@ -115,6 +115,20 @@ export type MangaAutofillResponse = {
   tags: string[];
 };
 
+export type MangaLibCreateRequest = {
+  url_or_slug: string;
+  folder?: string;
+};
+
+export type MangaLibCreateResponse = {
+  ok: boolean;
+  slug: string;
+  title: string;
+  mangalib_slug: string;
+  cover_url: string;
+  chapter_count: number;
+};
+
 export type ProjectMetadataUpdate = {
   description?: string;
   title_uz?: string;
@@ -232,12 +246,14 @@ export type Stats = {
 
 export type Region = {
   bbox: { x: number; y: number; w: number; h: number };
+  bbox_manual?: boolean;
   bubble_bbox?: { x: number; y: number; w: number; h: number };
   original_text?: string;
   uz_text?: string;
   manual?: boolean;
   is_dark_bubble?: boolean;
   font_size?: number;
+  font_size_manual?: boolean;
   rotation?: number;
   font_weight?: string;
   font_style?: string;

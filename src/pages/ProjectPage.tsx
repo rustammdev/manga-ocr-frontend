@@ -127,6 +127,15 @@ export default function ProjectPage() {
     (ch) => ch.status === "ocr_done" || ch.status === "done",
   );
   const hasTranslating = chapters.some((ch) => ch.status === "translating");
+  // Auto-merge ishlatilmaydigan mangalarda yangi yuklangan boblarni qo'lda
+  // 'Tartiblangan' deb belgilash mumkin (auto_merged flag'ini True qiladi).
+  const hasOrganizable = chapters.some(
+    (ch) =>
+      ch.status === "uploaded" &&
+      !ch.auto_merged &&
+      !ch.remote &&
+      ch.source !== "r2"
+  );
   const publishedChapters = project?.published_chapters || [];
   const hasPublishableChapters = chapters.some(
     (ch) =>
@@ -206,6 +215,7 @@ export default function ProjectPage() {
     try {
       await api.detachMangaLib(manga);
       toast.success("MangaLib link uzildi");
+      setMangaLibChaptersOpen(false);
       const updated = await api.getProject(manga);
       setProject(updated);
     } catch (e) {
@@ -287,6 +297,27 @@ export default function ProjectPage() {
   const [translateJobId, setTranslateJobId] = useState<string | null>(null);
   const [translateProgress, setTranslateProgress] = useState(0);
   const [translateMessage, setTranslateMessage] = useState("");
+
+  const [organizing, setOrganizing] = useState(false);
+
+  async function handleMarkOrganized() {
+    if (!manga || organizing) return;
+    setOrganizing(true);
+    try {
+      const res = await api.markOrganized(manga);
+      if (res.marked === 0) {
+        toast.info("Tartiblanadigan bob topilmadi");
+      } else {
+        toast.success(`${res.marked} ta bob 'Tartiblangan' deb belgilandi`);
+      }
+      const updated = await api.getProject(manga);
+      setProject(updated);
+    } catch (e) {
+      toast.error(`Tartiblash xatosi: ${(e as Error).message}`);
+    } finally {
+      setOrganizing(false);
+    }
+  }
 
   async function handleTranslateManga() {
     if (!manga) return;
@@ -706,12 +737,14 @@ export default function ProjectPage() {
         hasOcrDone={hasTranslatable}
         hasTranslating={hasTranslating || translatingManga || translateJobId !== null}
         hasPublishableChapters={hasPublishableChapters}
+        hasOrganizable={hasOrganizable}
+        isOrganizing={organizing}
         isPublishing={isPublishing}
         isAutoPiloting={autoPilotId !== null}
         mangaLibSlug={mangaLibSlug}
         onAttachMangaLib={() => setMangaLibAttachOpen(true)}
         onOpenMangaLibChapters={() => setMangaLibChaptersOpen(true)}
-        onDetachMangaLib={handleDetachMangaLib}
+        onMarkOrganized={handleMarkOrganized}
         onTranslate={handleTranslateManga}
         onPublish={handlePublishManga}
         onAutoPilot={() => setAutoPilotModalOpen(true)}
@@ -907,6 +940,7 @@ export default function ProjectPage() {
         publishedChapters={publishedChapters}
         onClose={() => setMangaLibChaptersOpen(false)}
         onDownloadStarted={handleMangaLibDownloadStarted}
+        onDetach={handleDetachMangaLib}
       />
     </div>
   );

@@ -244,15 +244,15 @@ export function useResizeMode({ anyModeActive, imgRef, canvasRef, manga, chapter
       if (!manga || !chapter) return;
       try {
         const resizedIdx = hoveredIdx;
-        await api.updateRegion(manga, chapter, currentPage, resizedIdx, { bbox: curBbox });
-        // Optimistic update — faqat bbox field yangilash
+        await api.updateRegion(manga, chapter, currentPage, resizedIdx, { bbox: curBbox, bbox_manual: true });
+        // Optimistic update — bbox + bbox_manual yangilash (matn shu box'ni to'ldiradi)
         const newBbox = { ...curBbox };
         setData((prev) => {
           if (!prev) return prev;
           const newPages = [...prev.pages];
           const page = { ...newPages[currentPage] };
           const newRegions = [...page.regions];
-          newRegions[resizedIdx] = { ...newRegions[resizedIdx], bbox: newBbox };
+          newRegions[resizedIdx] = { ...newRegions[resizedIdx], bbox: newBbox, bbox_manual: true };
           page.regions = newRegions;
           newPages[currentPage] = page;
           return { ...prev, pages: newPages };

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { api } from "../../lib/api";
 import type { Chapter, PageInfo } from "../../lib/types";
+import { chapterLabel } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
 import ImagePositioner from "./ImagePositioner";
@@ -147,7 +148,7 @@ export default function CoverCropModal({
                         className="rounded-md border px-3 py-2 text-sm hover:bg-muted transition-colors text-left"
                         onClick={() => handleSelectChapter(ch.name)}
                       >
-                        {ch.name}-bob
+                        {chapterLabel(ch.name)}-bob
                         <span className="block text-[11px] text-muted-foreground">{ch.image_count} rasm</span>
                       </button>
                     ))}

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, Plus, Languages, Trash2, Loader2, Upload, Rocket, Link2, BookDown, Unlink } from "lucide-react";
+import { ArrowLeft, Plus, Languages, Trash2, Loader2, Upload, Rocket, Link2, BookDown, ListOrdered } from "lucide-react";
 
 import { Button } from "../ui/button";
 
@@ -9,12 +9,14 @@ interface ProjectHeaderProps {
   hasOcrDone: boolean;
   hasTranslating: boolean;
   hasPublishableChapters: boolean;
+  hasOrganizable: boolean;
+  isOrganizing: boolean;
   isPublishing: boolean;
   isAutoPiloting: boolean;
   mangaLibSlug?: string | null;
   onAttachMangaLib: () => void;
   onOpenMangaLibChapters: () => void;
-  onDetachMangaLib: () => void;
+  onMarkOrganized: () => void;
   onTranslate: () => void;
   onPublish: () => void;
   onAutoPilot: () => void;
@@ -27,12 +29,14 @@ export default function ProjectHeader({
   hasOcrDone,
   hasTranslating,
   hasPublishableChapters,
+  hasOrganizable,
+  isOrganizing,
   isPublishing,
   isAutoPiloting,
   mangaLibSlug,
   onAttachMangaLib,
   onOpenMangaLibChapters,
-  onDetachMangaLib,
+  onMarkOrganized,
   onTranslate,
   onPublish,
   onAutoPilot,
@@ -61,27 +65,15 @@ export default function ProjectHeader({
 
         {/* MangaLib link */}
         {hasMangaLib ? (
-          <>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onOpenMangaLibChapters}
-              className="gap-1.5"
-            >
-              <BookDown className="h-3.5 w-3.5" />
-              MangaLib boblari
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onDetachMangaLib}
-              className="gap-1.5"
-              title="MangaLib linkini uzish"
-            >
-              <Unlink className="h-3.5 w-3.5" />
-              Linkni uzish
-            </Button>
-          </>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onOpenMangaLibChapters}
+            className="gap-1.5"
+          >
+            <BookDown className="h-3.5 w-3.5" />
+            MangaLib boblari
+          </Button>
         ) : (
           <Button
             size="sm"
@@ -109,6 +101,25 @@ export default function ProjectHeader({
           )}
           Auto Pilot
         </Button>
+
+        {/* Tartiblangan deb belgilash — auto-merge ishlatilmaydigan mangalar uchun */}
+        {hasOrganizable && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onMarkOrganized}
+            disabled={isOrganizing}
+            className="gap-1.5"
+            title="Yangi yuklangan boblarni birlashtirmasdan 'Tartiblangan' deb belgilash"
+          >
+            {isOrganizing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ListOrdered className="h-3.5 w-3.5" />
+            )}
+            Tartiblangan deb belgilash
+          </Button>
+        )}
 
         {hasTranslating ? (
           <Button variant="secondary" size="sm" disabled className="gap-1.5">

@@ -23,6 +23,8 @@ import type {
   MangaDexTag,
   MangaLibAttachResponse,
   MangaLibChaptersResponse,
+  MangaLibCreateRequest,
+  MangaLibCreateResponse,
   MangaLibDownloadRequest,
   MangaLibDownloadResponse,
   MangaLibSeries,
@@ -376,6 +378,12 @@ export const api = {
       { method: "POST" }
     ).then(handle<{ ok: boolean; merge_groups: number; total_merged: number; remaining: number }>);
   },
+  markOrganized(manga: string): Promise<{ ok: boolean; marked: number; chapters: string[] }> {
+    return fetch(
+      `/api/projects/${encodeURIComponent(manga)}/mark-organized`,
+      { method: "POST" }
+    ).then(handle<{ ok: boolean; marked: number; chapters: string[] }>);
+  },
   updateProjectFolder(slug: string, folder: string): Promise<{ slug: string; folder: string }> {
     return fetch(`/api/projects/${encodeURIComponent(slug)}/folder`, {
       method: "PUT",
@@ -528,6 +536,15 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url_or_slug: urlOrSlug }),
     }).then(handle<MangaLibSeries>);
+  },
+  createMangaLibProject(
+    payload: MangaLibCreateRequest,
+  ): Promise<MangaLibCreateResponse> {
+    return fetch("/api/mangalib/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).then(handle<MangaLibCreateResponse>);
   },
   attachMangaLib(
     manga: string,

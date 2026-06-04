@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Loader2, Sparkles } from "lucide-react";
+import { Plus, Loader2, Sparkles, Link2, Search } from "lucide-react";
+import { toast } from "sonner";
 
 import { api } from "../lib/api";
-import type { AgeRating, AuthorEntry, Folder, InpaintBackendValue, MangaStatus, OcrBackendValue, ScheduleDay, TranslatorModelInfo, TranslatorModelsMap } from "../lib/types";
+import type { AgeRating, AuthorEntry, Folder, InpaintBackendValue, MangaLibSeries, MangaStatus, OcrBackendValue, ScheduleDay, TranslatorModelInfo, TranslatorModelsMap } from "../lib/types";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
+import { Badge } from "../components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -23,11 +25,15 @@ import MetadataExtraFields from "../components/MetadataExtraFields";
 export default function NewProjectPage() {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
-  const [autofilling, setAutofilling] = useState(false);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState<"manual" | "autofill">("autofill");
+
+  // MangaLib auto fill state
+  const [mangalibUrl, setMangalibUrl] = useState("");
+  const [resolving, setResolving] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [preview, setPreview] = useState<MangaLibSeries | null>(null);
   const [autoFillError, setAutoFillError] = useState("");
-  const [rawData, setRawData] = useState("");
-  const [activeTab, setActiveTab] = useState<"manual" | "autofill">("manual");
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -60,30 +66,50 @@ export default function NewProjectPage() {
   const currentModels: TranslatorModelInfo[] = modelsMap[backend] || [];
   const defaultModel = currentModels.find((m) => m.default)?.value || "";
 
-  async function handleAutoFill() {
-    if (!rawData.trim()) {
-      setAutoFillError("Raw data kiriting");
+  async function handleResolve() {
+    const value = mangalibUrl.trim();
+    if (!value) {
+      setAutoFillError("MangaLib link yoki slug kiriting");
       return;
     }
-    setAutofilling(true);
+    setResolving(true);
+    setAutoFillError("");
+    setPreview(null);
+    try {
+      const series = await api.resolveMangaLib(value);
+      setPreview(series);
+    } catch (e) {
+      setAutoFillError((e as Error).message || "Tekshirib bo'lmadi");
+    } finally {
+      setResolving(false);
+    }
+  }
+
+  async function handleCreateFromLink() {
+    const value = mangalibUrl.trim();
+    if (!value) {
+      setAutoFillError("MangaLib link yoki slug kiriting");
+      return;
+    }
+    setCreating(true);
     setAutoFillError("");
     setError("");
     try {
-      const result = await api.autofillProject({ raw_text: rawData.trim() });
-      setName(result.name || name);
-      setDescription(result.description || description);
-      setTitleUz(result.title_uz || titleUz);
-      setTitleRu(result.title_ru || titleRu);
-      setTitleEn(result.title_en || titleEn);
-      setTitleJa(result.title_ja || titleJa);
-      setTitleKo(result.title_ko || titleKo);
-      if (result.tags?.length) setTags(result.tags);
-      setActiveTab("manual");
+      const result = await api.createMangaLibProject({
+        url_or_slug: value,
+        folder: folder.trim() || undefined,
+      });
+      toast.success(`"${result.title}" yaratildi — ${result.chapter_count} bob`);
+      navigate(`/project/${result.slug}`);
     } catch (e) {
-      const err = e as Error;
-      setAutoFillError(err.message);
+      const msg = (e as Error).message || "Yaratib bo'lmadi";
+      if (/already|409|biriktirilgan|attached/i.test(msg)) {
+        setAutoFillError("Bu MangaLib slug allaqachon boshqa loyihaga biriktirilgan");
+      } else {
+        setAutoFillError(msg);
+      }
     } finally {
-      setAutofilling(false);
+      setCreating(false);
     }
   }
 
@@ -141,31 +167,106 @@ export default function NewProjectPage() {
       <div className="mx-auto max-w-2xl space-y-6">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "manual" | "autofill")}>
           <TabsList className="w-full">
-            <TabsTrigger value="manual" className="flex-1">Qo'lda</TabsTrigger>
             <TabsTrigger value="autofill" className="flex-1 gap-2">
               <Sparkles className="h-4 w-4" />
-              Auto fill
+              Auto fill (MangaLib)
             </TabsTrigger>
+            <TabsTrigger value="manual" className="flex-1">Qo'lda</TabsTrigger>
           </TabsList>
 
           <TabsContent value="autofill" className="space-y-3">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Raw data</label>
-              <Textarea
-                value={rawData}
-                onChange={(e) => setRawData(e.target.value)}
-                placeholder="Title, alternative titles, synopsis, genres yoki boshqa metadata matnini shu yerga paste qiling..."
-                className="min-h-[180px]"
-              />
+              <label className="text-sm font-medium">MangaLib link yoki slug</label>
+              <div className="flex gap-2">
+                <Input
+                  value={mangalibUrl}
+                  onChange={(e) => setMangalibUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleResolve();
+                  }}
+                  placeholder="https://mangalib.me/ru/manga/114307--..."
+                  disabled={creating}
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleResolve}
+                  disabled={resolving || creating || !mangalibUrl.trim()}
+                  className="shrink-0 gap-1.5"
+                >
+                  {resolving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4" />
+                  )}
+                  Tekshir
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Link kiritsangiz orqa fonda seriya ma'lumotlari ajratiladi, nom o'zbek
+                tilida grammatik to'g'ri tarjima qilinadi, cover va boblar ro'yxati
+                avtomatik to'ldiriladi.
+              </p>
             </div>
+
             {autoFillError && (
               <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
                 {autoFillError}
               </div>
             )}
-            <Button onClick={handleAutoFill} disabled={autofilling || !rawData.trim()} className="gap-2">
-              {autofilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {autofilling ? "To'ldirilmoqda..." : "Auto fill"}
+
+            {preview && (
+              <div className="grid grid-cols-[100px_1fr] gap-3 rounded-lg border bg-muted/40 p-3">
+                <div className="aspect-[3/4] overflow-hidden rounded-md bg-muted">
+                  {preview.cover_url && (
+                    <img
+                      src={preview.cover_url}
+                      alt={preview.title}
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  )}
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                  <h3 className="text-sm font-semibold leading-tight">
+                    {preview.title || preview.rus_name || preview.eng_name || preview.slug}
+                  </h3>
+                  {preview.eng_name && (
+                    <p className="text-xs text-muted-foreground line-clamp-1">
+                      {preview.eng_name}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge variant="info">{preview.chapter_count} bob</Badge>
+                    {preview.status && <Badge variant="secondary">{preview.status}</Badge>}
+                    {preview.year != null && (
+                      <Badge variant="secondary">{preview.year}</Badge>
+                    )}
+                    {preview.age_rating && (
+                      <Badge variant="warning">{preview.age_rating}</Badge>
+                    )}
+                  </div>
+                  {preview.summary && (
+                    <p className="text-xs text-muted-foreground line-clamp-3">
+                      {preview.summary}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <Button
+              onClick={handleCreateFromLink}
+              disabled={creating || resolving || !mangalibUrl.trim()}
+              className="gap-2"
+            >
+              {creating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Link2 className="h-4 w-4" />
+              )}
+              {creating ? "Yaratilmoqda..." : "Manga yaratish"}
             </Button>
           </TabsContent>
 
@@ -267,7 +368,8 @@ export default function NewProjectPage() {
           </p>
         </div>
 
-        {/* Pipeline settings inline */}
+        {/* Pipeline settings inline (faqat qo'lda rejimida) */}
+        {activeTab === "manual" && (
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Manba tili</label>
@@ -322,15 +424,17 @@ export default function NewProjectPage() {
             <InpaintBackendSelect value={inpaintBackend} onValueChange={setInpaintBackend} />
           </div>
         </div>
+        )}
 
-        {/* Error */}
-        {error && (
+        {/* Error (qo'lda rejimi) */}
+        {activeTab === "manual" && error && (
           <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
             {error}
           </div>
         )}
 
-        {/* Submit */}
+        {/* Submit (qo'lda rejimi) */}
+        {activeTab === "manual" && (
         <div className="flex items-center gap-3 pt-2">
           <Button onClick={handleCreate} disabled={saving || !name.trim()} className="gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -340,6 +444,7 @@ export default function NewProjectPage() {
             Bekor qilish
           </Button>
         </div>
+        )}
       </div>
     </div>
   );

@@ -76,6 +76,19 @@ function buildFontString(
 const PREFERRED_MIN_FONT = 18;
 const FILL_RATIO = 0.92;
 
+// Bubble ICHIDAGI xavfsiz matn zonasi (ellipsga ichki to'rtburchak). Backend
+// `typesetter.bubble_text_zone` bilan mos: nutq pufagi ELLIPS, matn
+// to'rtburchak chetigacha to'ldirilsa burchaklarda kontur ustiga chiqib
+// ketadi. Shuning uchun matn bubble markazidagi shu nisbatdagi to'rtburchakka
+// joylanadi.
+const BUBBLE_TEXT_ZONE = 0.82;
+
+// Avto font sizing chegaralari. Matn bubble bo'sh joyini TO'LDIRISHI uchun
+// font yuqoriga ham o'sadi (faqat kichraymaydi). Bu chegaralar matn bubble'ni
+// to'ldirib, lekin SFX kabi ulkan bo'lib ketmasligi uchun.
+const AUTO_MIN_FONT = 14;
+const AUTO_MAX_FONT = 72;
+
 type Align = "left" | "center" | "right";
 
 /**
@@ -195,6 +208,78 @@ function computeRenderBox(
   return best;
 }
 
+/**
+ * Bubble ICHIDAGI xavfsiz matn zonasi (ellipsga ichki to'rtburchak).
+ * Backend `typesetter.bubble_text_zone` bilan mos.
+ */
+function bubbleTextZone(
+  bubble: { x: number; y: number; w: number; h: number },
+  ocr: { x: number; y: number; w: number; h: number },
+): { x: number; y: number; w: number; h: number } {
+  const cx = bubble.x + bubble.w / 2;
+  const cy = bubble.y + bubble.h / 2;
+  let zw = bubble.w * BUBBLE_TEXT_ZONE;
+  let zh = bubble.h * BUBBLE_TEXT_ZONE;
+  // Asl matn (OCR) zonadan kattaroq bo'lsa — zonani kengaytamiz (matn sig'sin),
+  // lekin bubble'dan oshmasin.
+  zw = Math.min(Math.max(zw, ocr.w), bubble.w);
+  zh = Math.min(Math.max(zh, ocr.h), bubble.h);
+  const x = Math.max(bubble.x, Math.round(cx - zw / 2));
+  const y = Math.max(bubble.y, Math.round(cy - zh / 2));
+  const w = Math.min(bubble.x + bubble.w - x, Math.round(zw));
+  const h = Math.min(bubble.y + bubble.h - y, Math.round(zh));
+  return { x, y, w: Math.max(1, w), h: Math.max(1, h) };
+}
+
+/**
+ * Berilgan box ichiga (fill_ratio bilan) SIG'ADIGAN ENG KATTA font hajmini
+ * binary-search bilan topadi. Matn box'ni TO'LDIRADI — kichik OCR/bubble'da
+ * kichrayadi, katta bubble'da kattalashadi. Backend `calculate_font_size`
+ * mantiqiga mos (lekin manba-balandlik cheklovisiz: matn doim bubble'ni
+ * to'ldiradi).
+ */
+function fitFontSize(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  boxW: number,
+  boxH: number,
+  fontFamily: string,
+  fontWeight: string,
+  fontStyle: string,
+  minFont: number,
+  maxFont: number,
+): number {
+  const usableW = Math.floor(boxW * FILL_RATIO);
+  const usableH = Math.floor(boxH * FILL_RATIO);
+  if (usableW <= 0 || usableH <= 0) return minFont;
+
+  const fits = (size: number): boolean => {
+    ctx.font = buildFontString(fontStyle, fontWeight, size, fontFamily);
+    const lines = wrapText(ctx, text, usableW);
+    if (!lines.length) return true;
+    const lineHeight = Math.floor(size * 1.2);
+    if (lines.length * lineHeight > usableH) return false;
+    for (const line of lines) {
+      if (ctx.measureText(line).width > usableW) return false;
+    }
+    return true;
+  };
+
+  let lo = minFont;
+  let hi = maxFont;
+  let best = minFont;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (fits(mid)) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return best;
+}
+
 export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Region[]) {
   ctx.textBaseline = "top";
 
@@ -208,31 +293,65 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
     const fontFamily = r.font_family || "Anime Ace";
     const align = resolveAlign(r);
 
-    // OCR bbox asosiy rendering box, matnga moslab smart-expand qilinadi
-    const box = computeRenderBox(ctx, r.bbox, r.bubble_bbox, text, fontFamily, fontWeight, fontStyle);
+    // Layout box'ni tanlash:
+    //  - Foydalanuvchi box'ni QO'LDA resize qilgan bo'lsa (`bbox_manual`) —
+    //    AYNAN o'sha `r.bbox` ishlatiladi va `fitFontSize` uni to'ldiradi
+    //    (box kattalashsa matn kattalashadi, kichraysa kichrayadi).
+    //  - Aks holda, haqiqiy bubble bor bo'lsa — matn bubble ichidagi xavfsiz
+    //    zonaga avto-fill qilinadi (bubble bo'sh joyini to'ldiradi).
+    //  - Bubble yo'q (Apple Vision) bo'lsa — OCR bbox matnga moslab kengayadi.
+    const hasRealBubble =
+      !!r.bubble_bbox &&
+      r.bubble_bbox.w > 0 &&
+      r.bubble_bbox.h > 0 &&
+      !(r.bubble_bbox.w === r.bbox.w && r.bbox.h === r.bubble_bbox.h);
+
+    let box: { x: number; y: number; w: number; h: number };
+    if (r.bbox_manual) {
+      box = r.bbox;
+    } else if (hasRealBubble) {
+      box = bubbleTextZone(r.bubble_bbox!, r.bbox);
+    } else {
+      box = computeRenderBox(ctx, r.bbox, r.bubble_bbox, text, fontFamily, fontWeight, fontStyle);
+    }
+
     const padding = 4;
     const boxWidth = Math.max(10, box.w);
     const boxHeight = Math.max(10, box.h);
     const maxWidth = Math.max(10, boxWidth - padding * 2);
     const maxHeight = Math.max(10, boxHeight - padding * 2);
 
-    // So'z soniga qarab max font chegarasi
-    const wordCount = text.split(/\s+/).length;
-    const maxFontByWords = wordCount <= 2 ? 48 : wordCount === 3 ? 42 : 36;
     const MIN_FONT = 8;
-    const PREFERRED_MIN = PREFERRED_MIN_FONT;
 
+    // Font hajmi:
+    //  - Foydalanuvchi QO'LDA o'rnatgan bo'lsa (font_size_manual) — o'shani
+    //    ishlatamiz (faqat sig'maguncha kichraytiriladi).
+    //  - Aks holda — matn box'ni TO'LDIRADIGAN eng katta font AVTO tanlanadi
+    //    (bubble katta bo'lsa katta, kichik bo'lsa kichik). Saqlangan avto
+    //    `font_size` e'tiborga olinmaydi — har doim qaytadan hisoblanadi,
+    //    shunda bubble bo'sh joyi to'ladi va o'lcham izchil bo'ladi.
     let fontSize: number;
-    if (r.font_size) {
+    if (r.font_size && r.font_size_manual) {
       fontSize = r.font_size;
     } else {
-      fontSize = Math.floor(Math.min(maxFontByWords, Math.max(PREFERRED_MIN, boxHeight * 0.45)));
+      fontSize = fitFontSize(
+        ctx,
+        text,
+        boxWidth,
+        boxHeight,
+        fontFamily,
+        fontWeight,
+        fontStyle,
+        AUTO_MIN_FONT,
+        AUTO_MAX_FONT,
+      );
     }
     ctx.font = buildFontString(fontStyle, fontWeight, fontSize, fontFamily);
     let lines = wrapText(ctx, text, maxWidth);
     let lineHeight = Math.floor(fontSize * 1.2);
 
-    // Vertikal yoki gorizontal sig'magunicha font kichraytiriladi.
+    // Vertikal yoki gorizontal sig'magunicha font kichraytiriladi (xavfsizlik
+    // chegarasi — manual qiymat juda katta bo'lsa ham box'dan chiqmaydi).
     const overflows = () => {
       if (lines.length * lineHeight > maxHeight) return true;
       for (const line of lines) {

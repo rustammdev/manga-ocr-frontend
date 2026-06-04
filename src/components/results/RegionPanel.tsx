@@ -71,7 +71,11 @@ const RegionItem = memo(function RegionItem({
   onRetranslateRegion,
 }: RegionItemProps) {
   const key = `${currentPage}-${i}`;
-  const serverFontSize = r.font_size || 0;
+  // Saqlangan font_size faqat QO'LDA o'rnatilgan bo'lsa (font_size_manual)
+  // haqiqiy qiymat hisoblanadi; aks holda avto rejim (render paytida bubble
+  // hajmiga moslab hisoblanadi) — UI'da "auto" ko'rsatiladi.
+  const serverManual = !!r.font_size_manual;
+  const serverFontSize = serverManual ? r.font_size || 0 : 0;
   const draftFontSize = draft.fontSize ?? serverFontSize;
   const serverRotation = r.rotation || 0;
   const draftRotation = draft.rotation ?? serverRotation;
@@ -217,7 +221,8 @@ const RegionItem = memo(function RegionItem({
             onClick={() =>
               setRegionDrafts((prev) => {
                 const cur = prev[key]?.fontSize ?? draftFontSize;
-                const base = cur || Math.floor(Math.min(36, Math.max(8, r.bbox.h * 0.45)));
+                const refH = r.bubble_bbox && r.bubble_bbox.h > 0 ? r.bubble_bbox.h : r.bbox.h;
+                const base = cur || Math.floor(Math.min(72, Math.max(14, refH * 0.32)));
                 return { ...prev, [key]: { ...draft, fontSize: Math.max(6, base - 1), status: undefined } };
               })
             }
@@ -232,7 +237,8 @@ const RegionItem = memo(function RegionItem({
             onClick={() =>
               setRegionDrafts((prev) => {
                 const cur = prev[key]?.fontSize ?? draftFontSize;
-                const base = cur || Math.floor(Math.min(36, Math.max(8, r.bbox.h * 0.45)));
+                const refH = r.bubble_bbox && r.bubble_bbox.h > 0 ? r.bubble_bbox.h : r.bbox.h;
+                const base = cur || Math.floor(Math.min(72, Math.max(14, refH * 0.32)));
                 return { ...prev, [key]: { ...draft, fontSize: Math.min(120, base + 1), status: undefined } };
               })
             }
@@ -431,6 +437,8 @@ const RegionItem = memo(function RegionItem({
                     };
                     if (draftFontSize !== serverFontSize) {
                       payload.font_size = draftFontSize || 0;
+                      // >0 = qo'lda o'rnatilgan (manual), 0 = avto rejimi
+                      payload.font_size_manual = draftFontSize > 0;
                     }
                     if (draftRotation !== serverRotation) {
                       payload.rotation = draftRotation;
@@ -463,7 +471,7 @@ const RegionItem = memo(function RegionItem({
                         ...newRegions[i],
                         original_text: draft.original,
                         uz_text: draft.translation,
-                        ...(draftFontSize !== serverFontSize && { font_size: draftFontSize }),
+                        ...(draftFontSize !== serverFontSize && { font_size: draftFontSize, font_size_manual: draftFontSize > 0 }),
                         ...(draftRotation !== serverRotation && { rotation: draftRotation }),
                         ...(draftFontWeight !== serverFontWeight && { font_weight: draftFontWeight }),
                         ...(draftFontStyle !== serverFontStyle && { font_style: draftFontStyle }),

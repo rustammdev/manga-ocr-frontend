@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { X, BookDown, Loader2, RefreshCw, Download, Sparkles, AlertCircle, ChevronDown, ChevronRight } from "lucide-react";
+import { X, BookDown, Loader2, RefreshCw, Download, Sparkles, AlertCircle, ChevronDown, ChevronRight, Unlink } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "../../lib/api";
@@ -19,6 +19,8 @@ interface MangaLibChaptersModalProps {
   publishedChapters: string[];
   onClose: () => void;
   onDownloadStarted: (jobIds: string[]) => void;
+  /** MangaLib linkini uzish. */
+  onDetach: () => void;
 }
 
 /** Bob raqamini lokal nom uslubida ko'rsatish: 5 → "5", 5.5 → "5.5". */
@@ -26,9 +28,9 @@ function formatChapter(n: number): string {
   return String(n);
 }
 
-/** Lokal bob nomidan ("005", "005.5") raqamli qiymat. */
+/** Lokal bob nomidan ("005", "010_1") raqamli qiymat. Kasr ajratuvchi '_'. */
 function chapterNameToNumber(name: string): number {
-  return parseFloat(name);
+  return parseFloat(name.replace("_", "."));
 }
 
 type RowStatus = "published" | "uploaded" | "new" | "none";
@@ -39,6 +41,7 @@ export default function MangaLibChaptersModal({
   publishedChapters,
   onClose,
   onDownloadStarted,
+  onDetach,
 }: MangaLibChaptersModalProps) {
   const [data, setData] = useState<MangaLibChaptersResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -211,12 +214,24 @@ export default function MangaLibChaptersModal({
               <Badge variant="secondary">{data.total} bob</Badge>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onDetach}
+              className="gap-1.5"
+              title="MangaLib linkini uzish"
+            >
+              <Unlink className="h-3.5 w-3.5" />
+              Linkni uzish
+            </Button>
+            <button
+              onClick={onClose}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Toolbar */}

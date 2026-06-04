@@ -186,7 +186,13 @@ export default function ResultsPage() {
       const draft = regionDrafts[`${currentPage}-${idx}`];
       if (!draft) return r;
       const patched = { ...r };
-      if (draft.fontSize) patched.font_size = draft.fontSize;
+      if (draft.fontSize) {
+        patched.font_size = draft.fontSize;
+        patched.font_size_manual = true;
+      } else if (draft.fontSize === 0) {
+        // Auto rejimi — saqlangan qiymatni e'tiborsiz qoldirib, avto-fit qilamiz
+        patched.font_size_manual = false;
+      }
       if (draft.rotation !== undefined) patched.rotation = draft.rotation;
       if (draft.fontWeight !== undefined) patched.font_weight = draft.fontWeight;
       if (draft.fontStyle !== undefined) patched.font_style = draft.fontStyle;

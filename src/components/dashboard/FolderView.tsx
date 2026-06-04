@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
@@ -8,10 +8,13 @@ import {
   Languages,
   Send,
   CheckCircle2,
+  Search,
+  X,
 } from "lucide-react";
 
 import type { Project } from "../../lib/types";
 import { Badge } from "../ui/badge";
+import { Input } from "../ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../ui/tabs";
 
 // --- helpers ---
@@ -181,22 +184,36 @@ interface FolderViewProps {
 }
 
 export default function FolderView({ projects, error }: FolderViewProps) {
+  const [query, setQuery] = useState("");
+
+  // Qidiruv bo'yicha filtrlangan mangalar — nomi va teglari bo'yicha.
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return projects;
+    return projects.filter((p) => {
+      const name = p.display_name.toLowerCase();
+      const slug = p.slug.toLowerCase();
+      const tags = (p.metadata?.tags ?? []).join(" ").toLowerCase();
+      return name.includes(q) || slug.includes(q) || tags.includes(q);
+    });
+  }, [projects, query]);
+
   // Group projects by pipeline stage
   const grouped = useMemo(() => {
     const map: Record<string, Project[]> = {
-      all: projects,
+      all: filtered,
       uploaded: [],
       ocr: [],
       translate: [],
       publish: [],
       done: [],
     };
-    for (const p of projects) {
+    for (const p of filtered) {
       const stage = getProjectStage(p);
       map[stage].push(p);
     }
     return map;
-  }, [projects]);
+  }, [filtered]);
 
   if (error) {
     return (
@@ -220,10 +237,31 @@ export default function FolderView({ projects, error }: FolderViewProps) {
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Mangalar</h2>
-        <span className="text-xs text-muted-foreground">
-          {projects.length} ta loyiha
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold shrink-0">Mangalar</h2>
+        <div className="relative w-full max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Manga qidirish..."
+            className="h-8 pl-8 pr-8 text-sm"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label="Tozalash"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {query
+            ? `${filtered.length} / ${projects.length} ta`
+            : `${projects.length} ta loyiha`}
         </span>
       </div>
 
@@ -254,10 +292,21 @@ export default function FolderView({ projects, error }: FolderViewProps) {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-center">
-                <tab.icon className="mb-2 h-6 w-6 text-muted-foreground/20" />
-                <p className="text-xs text-muted-foreground/50">
-                  Bu bosqichda manga yo'q
-                </p>
+                {query ? (
+                  <>
+                    <Search className="mb-2 h-6 w-6 text-muted-foreground/20" />
+                    <p className="text-xs text-muted-foreground/50">
+                      "{query}" bo'yicha manga topilmadi
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <tab.icon className="mb-2 h-6 w-6 text-muted-foreground/20" />
+                    <p className="text-xs text-muted-foreground/50">
+                      Bu bosqichda manga yo'q
+                    </p>
+                  </>
+                )}
               </div>
             )}
           </TabsContent>
