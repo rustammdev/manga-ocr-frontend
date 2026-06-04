@@ -191,6 +191,10 @@ export type ProjectSettings = {
   font_sfx?: string;
   font_narration?: string;
   font_clean?: string;
+  // Manga rejimi — matnni nutq-pufagi shakliga moslab kattalashtirish.
+  // Default false (webtoonlar uchun hozirgi xulq saqlanadi). Faqat MANGA
+  // (titanlar kabi) loyihalar uchun yoqiladi.
+  bubble_fit_manga?: boolean;
 };
 
 export type TranslatorModelInfo = {

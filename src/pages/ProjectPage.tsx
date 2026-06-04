@@ -42,6 +42,7 @@ export default function ProjectPage() {
     font_sfx: "Bangers",
     font_narration: "Manga Temple",
     font_clean: "Nunito",
+    bubble_fit_manga: false,
   });
   const [saving, setSaving] = useState(false);
   const [editingSettings, setEditingSettings] = useState(false);
@@ -84,6 +85,7 @@ export default function ProjectPage() {
             font_sfx: data.settings.font_sfx || "Bangers",
             font_narration: data.settings.font_narration || "Manga Temple",
             font_clean: data.settings.font_clean || "Nunito",
+            bubble_fit_manga: data.settings.bubble_fit_manga ?? false,
           });
         }
         if (data.metadata) {

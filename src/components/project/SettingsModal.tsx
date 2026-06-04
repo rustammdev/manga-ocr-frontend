@@ -219,6 +219,27 @@ export default function SettingsModal({
             />
             <span className="text-muted-foreground">Qora bubble aniqlash (dark bubble detection)</span>
           </label>
+          <div className="space-y-1.5 rounded-md border border-dashed border-sky-500/30 bg-sky-500/5 p-3">
+            <p className="text-[11px] font-medium text-sky-500/80">Manga rejimi (bubble-fit)</p>
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={settings.bubble_fit_manga ?? false}
+                onChange={(e) =>
+                  setSettings((prev) => ({ ...prev, bubble_fit_manga: e.target.checked }))
+                }
+                className="rounded border-gray-300"
+              />
+              <span className="text-muted-foreground">
+                Matnni nutq-pufagi shakliga moslab kattalashtirish
+              </span>
+            </label>
+            <p className="text-[11px] text-muted-foreground">
+              Faqat MANGA uchun (titanlar kabi). Matn pufak shakliga (doira/oval/
+              tartibsiz) moslanib kattalashtiriladi. Webtoonlar uchun YOQMANG —
+              ularda matn allaqachon katta (default xulq saqlanadi).
+            </p>
+          </div>
           <div className="space-y-2 rounded-md border border-dashed border-primary/30 bg-primary/5 p-3">
             <p className="text-[11px] font-medium text-primary/80">Fontlar (manga uchun default)</p>
             <p className="text-[11px] text-muted-foreground">

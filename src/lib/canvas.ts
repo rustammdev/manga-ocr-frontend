@@ -1,5 +1,102 @@
 import type { Region } from "./types";
 
+// ── O'zbekcha bo'g'in-asosli so'z ko'chirish (hyphenation) ──────────────────
+// Backend `uz_hyphen.py` bilan AYNAN bir xil mantiq. Uzun so'z qatorga
+// sig'masa harf bo'yicha keskin bo'lish o'rniga o'zbek bo'g'in qoidasi bilan
+// ("-" bo'g'in chegarasida) ko'chiriladi.
+const UZ_VOWELS = new Set("aeiouAEIOU".split(""));
+const UZ_APOSTROPHES = ["'", "\u2019", "\u02bc", "`"];
+const UZ_CONS_DIGRAPHS = ["ch", "sh"];
+
+function uzTokenize(word: string): string[] {
+  const tokens: string[] = [];
+  let i = 0;
+  const n = word.length;
+  while (i < n) {
+    const lower = word[i].toLowerCase();
+    if (i + 1 < n && (lower === "o" || lower === "g") && UZ_APOSTROPHES.includes(word[i + 1])) {
+      tokens.push(word.slice(i, i + 2));
+      i += 2;
+      continue;
+    }
+    if (i + 1 < n && UZ_CONS_DIGRAPHS.includes(word.slice(i, i + 2).toLowerCase())) {
+      tokens.push(word.slice(i, i + 2));
+      i += 2;
+      continue;
+    }
+    tokens.push(word[i]);
+    i += 1;
+  }
+  return tokens;
+}
+
+function uzIsVowel(token: string): boolean {
+  if (token.length === 1) return UZ_VOWELS.has(token);
+  return token.toLowerCase().startsWith("o");
+}
+
+function uzbekSyllabify(word: string): string[] {
+  const tokens = uzTokenize(word);
+  const n = tokens.length;
+  if (n === 0) return [];
+
+  const vowelPos: number[] = [];
+  tokens.forEach((t, idx) => {
+    if (uzIsVowel(t)) vowelPos.push(idx);
+  });
+  if (vowelPos.length === 0) return [word];
+
+  const cuts = [0];
+  for (let k = 0; k < vowelPos.length - 1; k++) {
+    const v1 = vowelPos[k];
+    const v2 = vowelPos[k + 1];
+    const gap = v2 - v1 - 1; // orasidagi undosh TOKENLAR soni
+    cuts.push(gap <= 1 ? v1 + 1 : v1 + 2);
+  }
+  cuts.push(n);
+  const uniqueCuts = Array.from(new Set(cuts)).sort((a, b) => a - b);
+  const syllables: string[] = [];
+  for (let i = 0; i < uniqueCuts.length - 1; i++) {
+    syllables.push(tokens.slice(uniqueCuts[i], uniqueCuts[i + 1]).join(""));
+  }
+  return syllables;
+}
+
+/**
+ * Uzun so'zni bo'g'inlar bo'yicha bo'laklarga ajratadi (ko'chirish).
+ * `fits` — matn qatorga sig'adimi. Ko'chirilgan bo'lakka "-" qo'shiladi.
+ * Bo'g'in bilan sig'dirib bo'lmasa [] (chaqiruvchi harf-fallbackka tushadi).
+ * Backend `uz_hyphen.break_word_uzbek` bilan mos.
+ */
+function breakWordUzbek(word: string, fits: (t: string) => boolean): string[] {
+  const syllables = uzbekSyllabify(word);
+  if (syllables.length < 2) return [];
+
+  const pieces: string[] = [];
+  let idx = 0;
+  const n = syllables.length;
+  let guard = 0;
+  while (idx < n && guard < 60) {
+    guard += 1;
+    let bestJ: number | null = null;
+    for (let j = n; j > idx; j--) {
+      const chunk = syllables.slice(idx, j).join("");
+      const isLast = j === n;
+      const test = isLast ? chunk : chunk + "-";
+      if (fits(test)) {
+        bestJ = j;
+        break;
+      }
+    }
+    if (bestJ === null) return [];
+    const isLast = bestJ === n;
+    const chunk = syllables.slice(idx, bestJ).join("");
+    pieces.push(isLast ? chunk : chunk + "-");
+    idx = bestJ;
+  }
+  return pieces;
+}
+
 /**
  * Matnni qatorlarga ajratadi. Avval ANIQ yangi qatorlar (\n) bo'yicha
  * bo'linadi (status/info panellardagi maʼnoli qator tuzilishini saqlaydi),
@@ -35,17 +132,25 @@ function wrapSegment(ctx: CanvasRenderingContext2D, text: string, maxWidth: numb
     if (ctx.measureText(word).width <= maxWidth) {
       current = word;
     } else {
-      let chunk = "";
-      for (const ch of word) {
-        const chunkTest = chunk + ch;
-        if (ctx.measureText(chunkTest).width <= maxWidth) {
-          chunk = chunkTest;
-        } else {
-          if (chunk) lines.push(chunk);
-          chunk = ch;
+      // Uzun so'z — avval O'ZBEKCHA bo'g'in-ko'chirish, bo'lmasa harflar
+      // bo'yicha bo'laklash (backend `typesetter._wrap_segment` bilan mos).
+      let chunks = breakWordUzbek(word, (t) => ctx.measureText(t).width <= maxWidth);
+      if (!chunks.length) {
+        chunks = [];
+        let chunk = "";
+        for (const ch of word) {
+          const chunkTest = chunk + ch;
+          if (ctx.measureText(chunkTest).width <= maxWidth || !chunk) {
+            chunk = chunkTest;
+          } else {
+            chunks.push(chunk);
+            chunk = ch;
+          }
         }
+        if (chunk) chunks.push(chunk);
       }
-      current = chunk;
+      for (const piece of chunks.slice(0, -1)) lines.push(piece);
+      current = chunks.length ? chunks[chunks.length - 1] : "";
     }
   }
   if (current) lines.push(current);
