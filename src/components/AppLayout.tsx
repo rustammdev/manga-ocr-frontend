@@ -1,5 +1,3 @@
-import { useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Upload,
@@ -11,6 +9,9 @@ import {
 } from "lucide-react";
 
 import { cn } from "../lib/utils";
+import { useTabs } from "../lib/tabs";
+import TabBar from "./TabBar";
+import TabView from "./TabView";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -21,30 +22,21 @@ const navItems = [
 ];
 
 export default function AppLayout() {
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    // Default — yopiq holat. Foydalanuvchi qaroridan keyin localStorage'da saqlanadi.
-    if (typeof window === "undefined") return true;
-    const saved = window.localStorage.getItem("sidebarCollapsed");
-    if (saved === null) return true;
-    return saved === "true";
-  });
-  const location = useLocation();
+  const {
+    tabs,
+    activeId,
+    collapsed,
+    toggleCollapsed,
+    navigateActive,
+  } = useTabs();
 
-  function toggleCollapsed() {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        window.localStorage.setItem("sidebarCollapsed", String(next));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  }
+  const activeTab = tabs.find((t) => t.id === activeId);
+  const activePath = activeTab?.path ?? "/";
 
   function isActiveRoute(to: string) {
-    if (to === "/") return location.pathname === "/";
-    return location.pathname.startsWith(to);
+    const path = activePath.split("?")[0];
+    if (to === "/") return path === "/";
+    return path.startsWith(to);
   }
 
   return (
@@ -74,11 +66,11 @@ export default function AppLayout() {
             const Icon = item.icon;
             const active = isActiveRoute(item.to);
             return (
-              <NavLink
+              <button
                 key={item.to}
-                to={item.to}
+                onClick={() => navigateActive(item.to)}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors",
+                  "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
                   active
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -86,7 +78,7 @@ export default function AppLayout() {
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 {!collapsed && <span className="truncate">{item.label}</span>}
-              </NavLink>
+              </button>
             );
           })}
         </nav>
@@ -110,11 +102,14 @@ export default function AppLayout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <div className="page-container">
-          <Outlet />
-        </div>
-      </main>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <TabBar />
+        <main className="relative flex-1 overflow-hidden">
+          {tabs.map((tab) => (
+            <TabView key={tab.id} tab={tab} active={tab.id === activeId} />
+          ))}
+        </main>
+      </div>
     </div>
   );
 }

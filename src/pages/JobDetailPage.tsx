@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, RotateCcw, Square, Eye, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,6 +22,7 @@ function phaseForProgress(progress: number) {
 
 export default function JobDetailPage() {
   const { jobId } = useParams();
+  const navigate = useNavigate();
   const [job, setJob] = useState<JobInfo | null>(null);
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState("Kutilmoqda...");
@@ -114,7 +115,7 @@ export default function JobDetailPage() {
   async function handleRestart() {
     if (!jobId) return;
     const res = await api.restartJob(jobId);
-    window.location.href = `/job/${res.job_id}`;
+    navigate(`/job/${res.job_id}`);
   }
 
   return (

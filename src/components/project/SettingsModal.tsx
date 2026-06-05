@@ -36,6 +36,37 @@ const FONT_CATEGORY_LABELS: Record<string, string> = {
   clean: "Oddiy",
 };
 
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Check({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-xs">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="rounded border-gray-300"
+      />
+      <span className="text-muted-foreground">{children}</span>
+    </label>
+  );
+}
+
 function FontRoleSelect({
   label,
   value,
@@ -46,8 +77,7 @@ function FontRoleSelect({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="space-y-1.5">
-      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+    <Field label={label}>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger>
           <SelectValue placeholder="Font" />
@@ -63,7 +93,70 @@ function FontRoleSelect({
           ))}
         </SelectContent>
       </Select>
-    </div>
+    </Field>
+  );
+}
+
+/**
+ * Rang tanlash — "Auto" (rasmdan aniqlanadi), ixtiyoriy "Yo'q" (faqat stroke),
+ * yoki aniq hex rang. Manga kesimida belgilansa auto-aniqlash o'chadi.
+ */
+function ColorField({
+  label,
+  value,
+  onChange,
+  allowNone = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  allowNone?: boolean;
+}) {
+  const isAuto = !value || value === "auto";
+  const isNone = value === "none";
+  const isHex = value.startsWith("#");
+  const swatch = isHex ? value : "#111827";
+
+  return (
+    <Field label={label}>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => onChange("auto")}
+          className={`rounded-md border px-2 py-1 text-[11px] ${
+            isAuto ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground"
+          }`}
+        >
+          Auto
+        </button>
+        {allowNone && (
+          <button
+            type="button"
+            onClick={() => onChange("none")}
+            className={`rounded-md border px-2 py-1 text-[11px] ${
+              isNone ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground"
+            }`}
+          >
+            Yo'q
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onChange(swatch)}
+          className={`rounded-md border px-2 py-1 text-[11px] ${
+            isHex ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground"
+          }`}
+        >
+          Rang
+        </button>
+        <input
+          type="color"
+          value={swatch}
+          onChange={(e) => onChange(e.target.value.toUpperCase())}
+          className="h-7 w-9 cursor-pointer rounded border bg-transparent p-0.5"
+        />
+      </div>
+    </Field>
   );
 }
 
@@ -91,14 +184,16 @@ export default function SettingsModal({
 
   const currentModels: TranslatorModelInfo[] = modelsMap[settings.backend] || [];
   const defaultModel = currentModels.find((m) => m.default)?.value || "";
+  const set = <K extends keyof ProjectSettings>(key: K, val: ProjectSettings[K]) =>
+    setSettings((prev) => ({ ...prev, [key]: val }));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
-        className="mx-4 w-full max-w-2xl rounded-lg border bg-card shadow-xl"
+        className="mx-4 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border bg-card shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b px-5 py-3">
+        <div className="sticky top-0 flex items-center justify-between border-b bg-card px-5 py-3">
           <div className="flex items-center gap-2">
             <Settings2 className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium">Pipeline sozlamalari</span>
@@ -107,15 +202,13 @@ export default function SettingsModal({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="space-y-4 p-5">
+
+        <div className="space-y-5 p-5">
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Manba tili</label>
+            <Field label="Manba tili">
               <Select
                 value={settings.language}
-                onValueChange={(value) =>
-                  setSettings((prev) => ({ ...prev, language: value as ProjectSettings["language"] }))
-                }
+                onValueChange={(v) => set("language", v as ProjectSettings["language"])}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Til" />
@@ -127,15 +220,14 @@ export default function SettingsModal({
                   <SelectItem value="en">Inglizcha (EN)</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Tarjima backend</label>
+            </Field>
+            <Field label="Tarjima backend">
               <Select
                 value={settings.backend}
-                onValueChange={(value) =>
+                onValueChange={(v) =>
                   setSettings((prev) => ({
                     ...prev,
-                    backend: value as ProjectSettings["backend"],
+                    backend: v as ProjectSettings["backend"],
                     translator_model: "",
                   }))
                 }
@@ -151,14 +243,11 @@ export default function SettingsModal({
                   <SelectItem value="kiro">Kiro (Amazon Q)</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Tarjima modeli</label>
+            </Field>
+            <Field label="Tarjima modeli">
               <Select
                 value={settings.translator_model || defaultModel}
-                onValueChange={(value) =>
-                  setSettings((prev) => ({ ...prev, translator_model: value }))
-                }
+                onValueChange={(v) => set("translator_model", v)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Model" />
@@ -171,121 +260,96 @@ export default function SettingsModal({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">OCR backend</label>
+            </Field>
+            <Field label="OCR backend">
               <OcrBackendSelect
                 value={settings.ocr_backend}
-                onValueChange={(value) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    ocr_backend: value,
-                  }))
-                }
+                onValueChange={(v) => set("ocr_backend", v)}
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Cleaner (inpaint) backend</label>
+            </Field>
+            <Field label="Cleaner backend">
               <InpaintBackendSelect
                 value={settings.inpaint_backend ?? "migan"}
-                onValueChange={(value) =>
-                  setSettings((prev) => ({ ...prev, inpaint_backend: value }))
-                }
+                onValueChange={(v) => set("inpaint_backend", v)}
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Rasm limiti</label>
+            </Field>
+            <Field label="Rasm limiti">
               <Input
                 type="number"
                 min={0}
                 value={settings.limit}
-                onChange={(e) =>
-                  setSettings((prev) => ({
-                    ...prev,
-                    limit: Number.parseInt(e.target.value || "0", 10),
-                  }))
-                }
+                onChange={(e) => set("limit", Number.parseInt(e.target.value || "0", 10))}
+              />
+            </Field>
+          </div>
+
+          <Check
+            checked={settings.detect_dark_bubbles ?? false}
+            onChange={(v) => set("detect_dark_bubbles", v)}
+          >
+            Qora bubble aniqlash
+          </Check>
+
+          <Check
+            checked={settings.bubble_fit_manga ?? false}
+            onChange={(v) => set("bubble_fit_manga", v)}
+          >
+            Manga rejimi — matnni pufak shakliga moslab kattalashtirish (webtoon uchun yoqmang)
+          </Check>
+
+          <div className="space-y-3 border-t pt-4">
+            <p className="text-xs font-medium">Matn rangi</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ColorField
+                label="Font rangi"
+                value={settings.font_color || "auto"}
+                onChange={(v) => set("font_color", v)}
+              />
+              <ColorField
+                label="Hoshiya (stroke)"
+                value={settings.stroke_color || "auto"}
+                onChange={(v) => set("stroke_color", v)}
+                allowNone
               />
             </div>
-          </div>
-          <label className="flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={settings.detect_dark_bubbles ?? false}
-              onChange={(e) =>
-                setSettings((prev) => ({ ...prev, detect_dark_bubbles: e.target.checked }))
-              }
-              className="rounded border-gray-300"
-            />
-            <span className="text-muted-foreground">Qora bubble aniqlash (dark bubble detection)</span>
-          </label>
-          <div className="space-y-1.5 rounded-md border border-dashed border-sky-500/30 bg-sky-500/5 p-3">
-            <p className="text-[11px] font-medium text-sky-500/80">Manga rejimi (bubble-fit)</p>
-            <label className="flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                checked={settings.bubble_fit_manga ?? false}
-                onChange={(e) =>
-                  setSettings((prev) => ({ ...prev, bubble_fit_manga: e.target.checked }))
-                }
-                className="rounded border-gray-300"
-              />
-              <span className="text-muted-foreground">
-                Matnni nutq-pufagi shakliga moslab kattalashtirish
-              </span>
-            </label>
             <p className="text-[11px] text-muted-foreground">
-              Faqat MANGA uchun (titanlar kabi). Matn pufak shakliga (doira/oval/
-              tartibsiz) moslanib kattalashtiriladi. Webtoonlar uchun YOQMANG —
-              ularda matn allaqachon katta (default xulq saqlanadi).
+              Auto — rang rasmdan aniqlanadi. Aniq rang belgilansa butun manga shu rangda chiziladi.
             </p>
           </div>
-          <div className="space-y-2 rounded-md border border-dashed border-primary/30 bg-primary/5 p-3">
-            <p className="text-[11px] font-medium text-primary/80">Fontlar (manga uchun default)</p>
-            <p className="text-[11px] text-muted-foreground">
-              Har rol uchun standart font. Editor sahifasida har bir matn alohida o'zgartirilishi mumkin.
-            </p>
+
+          <div className="space-y-3 border-t pt-4">
+            <p className="text-xs font-medium">Fontlar (rol bo'yicha)</p>
             <div className="grid gap-3 sm:grid-cols-3">
               <FontRoleSelect
                 label="Dialog"
                 value={settings.font_dialogue || ROLE_DEFAULTS.dialogue}
-                onChange={(v) => setSettings((prev) => ({ ...prev, font_dialogue: v }))}
+                onChange={(v) => set("font_dialogue", v)}
               />
               <FontRoleSelect
                 label="SFX / FX"
                 value={settings.font_sfx || ROLE_DEFAULTS.sfx}
-                onChange={(v) => setSettings((prev) => ({ ...prev, font_sfx: v }))}
+                onChange={(v) => set("font_sfx", v)}
               />
               <FontRoleSelect
                 label="Narration"
                 value={settings.font_narration || ROLE_DEFAULTS.narration}
-                onChange={(v) => setSettings((prev) => ({ ...prev, font_narration: v }))}
+                onChange={(v) => set("font_narration", v)}
               />
             </div>
           </div>
-          <div className="space-y-1.5 rounded-md border border-dashed border-amber-500/30 bg-amber-500/5 p-3">
-            <p className="text-[11px] font-medium text-amber-500/80">Qayta ishlash</p>
-            <label className="flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                checked={forceOcr}
-                onChange={(e) => setForceOcr(e.target.checked)}
-                className="rounded border-gray-300"
-              />
-              <span className="text-muted-foreground">Qayta OCR (mavjud natijalarni o'chirib boshidan)</span>
-            </label>
-            <label className="flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                checked={forceClean}
-                onChange={(e) => setForceClean(e.target.checked)}
-                className="rounded border-gray-300"
-              />
-              <span className="text-muted-foreground">Qayta Clean (tozalangan rasmlarni qayta tozalash)</span>
-            </label>
+
+          <div className="space-y-2 border-t pt-4">
+            <p className="text-xs font-medium">Qayta ishlash</p>
+            <Check checked={forceOcr} onChange={setForceOcr}>
+              Qayta OCR (mavjud natijalarni o'chirib boshidan)
+            </Check>
+            <Check checked={forceClean} onChange={setForceClean}>
+              Qayta Clean (tozalangan rasmlarni qayta tozalash)
+            </Check>
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2 border-t px-5 py-3">
+
+        <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-card px-5 py-3">
           <Button variant="ghost" size="sm" onClick={onClose}>
             Bekor
           </Button>

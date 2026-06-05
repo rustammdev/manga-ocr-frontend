@@ -195,6 +195,11 @@ export type ProjectSettings = {
   // Default false (webtoonlar uchun hozirgi xulq saqlanadi). Faqat MANGA
   // (titanlar kabi) loyihalar uchun yoqiladi.
   bubble_fit_manga?: boolean;
+  // Manga-darajasidagi matn rangi. "auto" (default) — rang rasmdan aniqlanadi.
+  // Hex (#RRGGBB) — auto o'chadi, butun manga shu rangda chiziladi.
+  font_color?: string;
+  // Hoshiya rangi: "auto" (aniqlanadi), "none" (hoshiyasiz) yoki hex.
+  stroke_color?: string;
 };
 
 export type TranslatorModelInfo = {
