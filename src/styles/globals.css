@@ -44,11 +44,11 @@
 @font-face { font-family: "Komika Text"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/KomikaText-Bold.ttf") format("truetype"); }
 @font-face { font-family: "Komika Text"; font-style: italic; font-weight: 700; font-display: swap; src: url("/fonts/KomikaText-BoldItalic.ttf") format("truetype"); }
 
-/* Manga Temple — narration / fikr */
-@font-face { font-family: "Manga Temple"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/MangaTemple-Regular.ttf") format("truetype"); }
-@font-face { font-family: "Manga Temple"; font-style: italic; font-weight: 400; font-display: swap; src: url("/fonts/MangaTemple-Italic.ttf") format("truetype"); }
-@font-face { font-family: "Manga Temple"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/MangaTemple-Bold.ttf") format("truetype"); }
-@font-face { font-family: "Manga Temple"; font-style: italic; font-weight: 700; font-display: swap; src: url("/fonts/MangaTemple-Bold.ttf") format("truetype"); }
+/* Agency Gothic — narration / fikr */
+@font-face { font-family: "Agency Gothic"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/AgencyGothicCT-Bold.otf") format("opentype"); }
+@font-face { font-family: "Agency Gothic"; font-style: italic; font-weight: 400; font-display: swap; src: url("/fonts/AgencyGothicCT-Bold.otf") format("opentype"); }
+@font-face { font-family: "Agency Gothic"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/AgencyGothicCT-Bold.otf") format("opentype"); }
+@font-face { font-family: "Agency Gothic"; font-style: italic; font-weight: 700; font-display: swap; src: url("/fonts/AgencyGothicCT-Bold.otf") format("opentype"); }
 
 /* SFX / FX fontlar */
 @font-face { font-family: "Who Dares"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/WhoDares-Regular.otf") format("opentype"); }

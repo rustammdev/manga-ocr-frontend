@@ -21,7 +21,7 @@ export const MANGA_FONTS: FontEntry[] = [
   { family: "Komika Text", category: "comic", hasBold: true, hasItalic: true },
 
   // Narration / fikr
-  { family: "Manga Temple", category: "narration", hasBold: true, hasItalic: true },
+  { family: "Agency Gothic", category: "narration", hasBold: false, hasItalic: false },
 
   // SFX / FX
   { family: "Bangers", category: "sfx", hasBold: false, hasItalic: false },
@@ -38,8 +38,8 @@ export const MANGA_FONTS: FontEntry[] = [
 // Har rol uchun default font — backend `ROLE_DEFAULTS` bilan mos.
 export const ROLE_DEFAULTS = {
   dialogue: "Anime Ace",
-  sfx: "Bangers",
-  narration: "Manga Temple",
+  sfx: "Komika Text",
+  narration: "Agency Gothic",
   clean: "Nunito",
 } as const;
 

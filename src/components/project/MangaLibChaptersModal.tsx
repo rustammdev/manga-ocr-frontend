@@ -48,6 +48,8 @@ export default function MangaLibChaptersModal({
   const [syncing, setSyncing] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Tanlash uzluksiz `seq` bo'yicha — MangaLib har tomda bob raqamini
+  // takrorlaydi, shuning uchun `number` yagona kalit emas.
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [fromChapter, setFromChapter] = useState("");
   const [toChapter, setToChapter] = useState("");
@@ -79,9 +81,9 @@ export default function MangaLibChaptersModal({
 
   const results = data?.results ?? [];
 
-  // Push (publish) qilingan bob raqamlari — "yuklangan, lekin push qilinmagan"
-  // holatini ajratish uchun.
-  const publishedNumbers = useMemo(() => {
+  // Push (publish) qilingan bob raqamlari (lokal nom = seq) — "yuklangan,
+  // lekin push qilinmagan" holatini ajratish uchun.
+  const publishedSeqs = useMemo(() => {
     const set = new Set<number>();
     for (const name of publishedChapters) {
       const n = chapterNameToNumber(name);
@@ -93,11 +95,11 @@ export default function MangaLibChaptersModal({
   const rowStatus = useCallback(
     (ch: MangaLibChapterEntry): RowStatus => {
       if (ch.imported) {
-        return publishedNumbers.has(ch.number) ? "published" : "uploaded";
+        return publishedSeqs.has(ch.seq) ? "published" : "uploaded";
       }
       return ch.is_new ? "new" : "none";
     },
-    [publishedNumbers],
+    [publishedSeqs],
   );
 
   const newChapters = useMemo(
@@ -109,33 +111,34 @@ export default function MangaLibChaptersModal({
     [results],
   );
   const uploadedNotPublishedCount = useMemo(
-    () => results.filter((c) => c.imported && !publishedNumbers.has(c.number)).length,
-    [results, publishedNumbers],
+    () => results.filter((c) => c.imported && !publishedSeqs.has(c.seq)).length,
+    [results, publishedSeqs],
   );
 
-  // Yuklab olinmagan boblar doim ko'rinadi; yuklab olinganlar (eski) yashiriladi.
+  // Faqat allaqachon push qilingan boblar yashiriladi. Yangi va yuklab olingan
+  // (lekin hali push qilinmagan) boblar doim ko'rinadi.
   const availableChapters = useMemo(
-    () => results.filter((c) => !c.imported),
-    [results],
+    () => results.filter((c) => !(c.imported && publishedSeqs.has(c.seq))),
+    [results, publishedSeqs],
   );
   const importedChapters = useMemo(
-    () => results.filter((c) => c.imported),
-    [results],
+    () => results.filter((c) => c.imported && publishedSeqs.has(c.seq)),
+    [results, publishedSeqs],
   );
 
   if (!open) return null;
 
-  function toggle(number: number) {
+  function toggle(seq: number) {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(number)) next.delete(number);
-      else next.add(number);
+      if (next.has(seq)) next.delete(seq);
+      else next.add(seq);
       return next;
     });
   }
 
   function selectNew() {
-    setSelected(new Set(newChapters.map((c) => c.number)));
+    setSelected(new Set(newChapters.map((c) => c.seq)));
   }
 
   function clearSelection() {
@@ -157,17 +160,17 @@ export default function MangaLibChaptersModal({
   }
 
   function buildPayload(): MangaLibDownloadRequest | null {
-    // Aniq tanlangan boblar ustun.
+    // Aniq tanlangan boblar ustun (seq bo'yicha).
     if (selected.size > 0) {
-      return { chapter_numbers: [...selected].sort((a, b) => a - b) };
+      return { chapter_seqs: [...selected].sort((a, b) => a - b) };
     }
-    // Diapazon.
+    // Diapazon (seq bo'yicha).
     const from = fromChapter.trim() ? Number(fromChapter) : null;
     const to = toChapter.trim() ? Number(toChapter) : null;
     if (from != null || to != null) {
       if (from != null && Number.isNaN(from)) return null;
       if (to != null && Number.isNaN(to)) return null;
-      return { from_chapter: from, to_chapter: to };
+      return { from_seq: from, to_seq: to };
     }
     return null;
   }
@@ -309,11 +312,11 @@ export default function MangaLibChaptersModal({
                 <ul className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
                   {availableChapters.map((ch) => (
                     <ChapterRow
-                      key={`${ch.number}-${ch.chapter_id}`}
+                      key={`${ch.volume}-${ch.number}-${ch.chapter_id}`}
                       chapter={ch}
                       status={rowStatus(ch)}
-                      checked={selected.has(ch.number)}
-                      onToggle={() => toggle(ch.number)}
+                      checked={selected.has(ch.seq)}
+                      onToggle={() => toggle(ch.seq)}
                       disabled={hasRange}
                     />
                   ))}
@@ -336,7 +339,7 @@ export default function MangaLibChaptersModal({
                     ) : (
                       <ChevronRight className="h-3.5 w-3.5" />
                     )}
-                    Yuklab olingan boblar ({importedChapters.length})
+                    Push qilingan boblar ({importedChapters.length})
                     <span className="font-normal text-muted-foreground/60">
                       {showImported ? "yashirish" : "ko'rsatish"}
                     </span>
@@ -345,11 +348,11 @@ export default function MangaLibChaptersModal({
                     <ul className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
                       {importedChapters.map((ch) => (
                         <ChapterRow
-                          key={`${ch.number}-${ch.chapter_id}`}
+                          key={`${ch.volume}-${ch.number}-${ch.chapter_id}`}
                           chapter={ch}
                           status={rowStatus(ch)}
-                          checked={selected.has(ch.number)}
-                          onToggle={() => toggle(ch.number)}
+                          checked={selected.has(ch.seq)}
+                          onToggle={() => toggle(ch.seq)}
                           disabled={hasRange}
                         />
                       ))}
@@ -414,7 +417,10 @@ interface ChapterRowProps {
 }
 
 function ChapterRow({ chapter, status, checked, onToggle, disabled }: ChapterRowProps) {
-  const isDisabled = disabled || chapter.imported;
+  // Imported boblar ham QAYTA tanlanishi mumkin — yuklash yarim qolsa yoki
+  // xato bo'lsa qayta yuklab olish kerak. Checkbox faqat diapazon rejimida
+  // (`disabled`) o'chiriladi, "imported" bo'lgani uchun emas.
+  const isDisabled = disabled;
   return (
     <li
       className={`flex items-center gap-3 border-b px-5 py-2 text-sm ${
@@ -430,12 +436,11 @@ function ChapterRow({ chapter, status, checked, onToggle, disabled }: ChapterRow
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-medium">Bob {formatChapter(chapter.number)}</span>
-          {chapter.volume ? (
-            <span className="text-xs text-muted-foreground">
-              (Том {chapter.volume})
-            </span>
-          ) : null}
+          <span className="font-medium">Bob {formatChapter(chapter.seq)}</span>
+          <span className="text-xs text-muted-foreground">
+            {chapter.volume ? `Том ${chapter.volume} · ` : ""}
+            asl #{formatChapter(chapter.number)}
+          </span>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">

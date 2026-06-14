@@ -620,6 +620,8 @@ export type MangaLibSeries = {
 export type MangaLibChapterEntry = {
   number: number;
   volume: number;
+  /** Volume-major uzluksiz tartib raqami (lokal bob nomi shundan). */
+  seq: number;
   name: string;
   chapter_id: string;
   imported: boolean;
@@ -650,9 +652,9 @@ export type MangaLibAttachResponse = {
 
 export type MangaLibDownloadRequest = {
   only_new?: boolean;
-  from_chapter?: number | null;
-  to_chapter?: number | null;
-  chapter_numbers?: number[];
+  from_seq?: number | null;
+  to_seq?: number | null;
+  chapter_seqs?: number[];
 };
 
 export type MangaLibDownloadResponse = {

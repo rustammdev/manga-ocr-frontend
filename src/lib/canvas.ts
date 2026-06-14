@@ -181,6 +181,19 @@ function buildFontString(
 const PREFERRED_MIN_FONT = 18;
 const FILL_RATIO = 0.92;
 
+// Apple Vision (built-in) detektori `bubble_bbox`ni OCR bbox'ga TENG qilib
+// beradi — haqiqiy pufak yo'q. Bunday holda OCR box atrofida "virtual pufak"
+// yaratamiz, shunda matn o'qishga qulay hajmga kengayadi.
+//
+// MUHIM: kengaytirish VERTIKAL (tepa-past) ustun bo'lishi kerak. Nutq pufagi
+// odatda yumaloq/baland — OCR box eni ≈ pufakdagi matn ustuni eni. Eni KO'P
+// kengaytirilsa, matn pufak chetidan YONGA chiqib ketadi. Tepa-pastda esa joy
+// ko'p. Shuning uchun enini kam (×1.3), bo'yini ko'p (×2.8) kengaytiramiz:
+// uzunroq o'zbekcha tarjima ko'proq QATORGA bo'linadi va vertikal joyni
+// to'ldiradi, font kattalashadi, lekin yon tomonga chiqmaydi.
+const SYNTH_EXPAND_W = 1.2; // eni eng ko'pi bilan +20% (yonga chiqmaslik uchun)
+const SYNTH_EXPAND_H = 2.2; // bo'yi eng ko'pi bilan +120% (tepa-past bo'sh joy)
+
 // Bubble ICHIDAGI xavfsiz matn zonasi (ellipsga ichki to'rtburchak). Backend
 // `typesetter.bubble_text_zone` bilan mos: nutq pufagi ELLIPS, matn
 // to'rtburchak chetigacha to'ldirilsa burchaklarda kontur ustiga chiqib
@@ -189,10 +202,29 @@ const FILL_RATIO = 0.92;
 const BUBBLE_TEXT_ZONE = 0.82;
 
 // Avto font sizing chegaralari. Matn bubble bo'sh joyini TO'LDIRISHI uchun
-// font yuqoriga ham o'sadi (faqat kichraymaydi). Bu chegaralar matn bubble'ni
-// to'ldirib, lekin SFX kabi ulkan bo'lib ketmasligi uchun.
+// font yuqoriga ham o'sadi (faqat kichraymaydi).
+//
+// `AUTO_MAX_FONT` — qatʼiy yuqori chegara EMAS. Asl cheklov box balandligi:
+// bitta qator `1.2 * size` balandlikni egallaydi, shuning uchun font box
+// balandligidan oshib keta olmaydi. Avval bu 72px qatʼiy edi — natijada KATTA
+// bubble'larda matn 72px da to'xtab, pufak ichida juda kichik ko'rinardi.
+// Endi haqiqiy chegara box o'lchamidan kelib chiqib hisoblanadi (`maxFontForBox`).
 const AUTO_MIN_FONT = 14;
 const AUTO_MAX_FONT = 72;
+// Yuqori xavfsizlik tomi (SFX kabi ulkan bo'lib ketmasligi uchun).
+const AUTO_FONT_HARD_CAP = 240;
+
+/**
+ * Box uchun mantiqiy maksimal font: bitta qator box balandligiga sig'ishi
+ * kerak (`1.2 * size <= FILL_RATIO * h`), shuning uchun font box balandligidan
+ * oshib ketolmaydi. Bu KATTA bubble'larda matnning to'liq o'sishiga imkon
+ * beradi (oldingi 72px qatʼiy cheklov olib tashlandi).
+ */
+function maxFontForBox(boxW: number, boxH: number): number {
+  void boxW;
+  const byHeight = Math.floor((boxH * FILL_RATIO) / 1.2);
+  return Math.max(AUTO_MIN_FONT, Math.min(AUTO_FONT_HARD_CAP, Math.max(AUTO_MAX_FONT, byHeight)));
+}
 
 type Align = "left" | "center" | "right";
 
@@ -260,6 +292,31 @@ function textFitsInBox(
   return fits;
 }
 
+/**
+ * OCR bbox atrofida sintetik "virtual bubble" — backend `_synthetic_bubble`
+ * bilan mos. Markaz saqlanadi (matn original joyida qoladi), `imageSize`
+ * berilsa rasm chegarasiga moslanadi.
+ */
+function syntheticBubble(
+  ocr: { x: number; y: number; w: number; h: number },
+  imageSize?: { w: number; h: number },
+): { x: number; y: number; w: number; h: number } {
+  let newW = Math.max(ocr.w, Math.round(ocr.w * SYNTH_EXPAND_W));
+  let newH = Math.max(ocr.h, Math.round(ocr.h * SYNTH_EXPAND_H));
+  let x = Math.round(ocr.x - (newW - ocr.w) / 2);
+  let y = Math.round(ocr.y - (newH - ocr.h) / 2);
+  if (imageSize) {
+    x = Math.max(0, Math.min(x, Math.max(0, imageSize.w - 1)));
+    y = Math.max(0, Math.min(y, Math.max(0, imageSize.h - 1)));
+    newW = Math.min(newW, imageSize.w - x);
+    newH = Math.min(newH, imageSize.h - y);
+  } else {
+    x = Math.max(0, x);
+    y = Math.max(0, y);
+  }
+  return { x, y, w: Math.max(1, newW), h: Math.max(1, newH) };
+}
+
 function computeRenderBox(
   ctx: CanvasRenderingContext2D,
   bbox: { x: number; y: number; w: number; h: number },
@@ -268,15 +325,42 @@ function computeRenderBox(
   fontFamily: string = "Anime Ace",
   fontWeight: string = "bold",
   fontStyle: string = "normal",
+  imageSize?: { w: number; h: number },
 ): { x: number; y: number; w: number; h: number } {
-  if (!bubbleBbox || bubbleBbox.w <= 0 || bubbleBbox.h <= 0) return bbox;
-
-  const areaRatio = (bbox.w * bbox.h) / Math.max(1, bubbleBbox.w * bubbleBbox.h);
-  const needsExpand = areaRatio < 0.5;
-
-  let box = needsExpand ? expandBoxWithinBubble(bbox, bubbleBbox, 0.5) : bbox;
-
   const measureText = (text || "").trim();
+
+  const realBubble =
+    !!bubbleBbox &&
+    bubbleBbox.w > 0 &&
+    bubbleBbox.h > 0 &&
+    !(bubbleBbox.w === bbox.w && bubbleBbox.h === bbox.h);
+
+  // "Ish pufagi"ni tanlash (backend `compute_render_bbox` bilan mos):
+  //  - Haqiqiy, OCR'dan kattaroq pufak — o'shani ishlatamiz (eski xulq:
+  //    OCR juda kichik bo'lsa darhol 50% sakraymiz).
+  //  - Aks holda (pufak yo'q yoki OCR'ga teng — Apple Vision) va matn bor —
+  //    OCR atrofida SINTETIK virtual pufak yaratamiz (sakrashsiz).
+  //  - Matn ham, kengaytiradigan pufak ham yo'q — OCR bbox o'zgarmaydi.
+  let workBubble: { x: number; y: number; w: number; h: number };
+  let isSynthetic: boolean;
+  if (realBubble) {
+    workBubble = bubbleBbox!;
+    isSynthetic = false;
+  } else if (measureText) {
+    workBubble = syntheticBubble(bbox, imageSize);
+    isSynthetic = true;
+  } else {
+    return bbox;
+  }
+
+  let box: { x: number; y: number; w: number; h: number };
+  if (!isSynthetic) {
+    const areaRatio = (bbox.w * bbox.h) / Math.max(1, workBubble.w * workBubble.h);
+    box = areaRatio < 0.5 ? expandBoxWithinBubble(bbox, workBubble, 0.5) : bbox;
+  } else {
+    box = bbox;
+  }
+
   if (!measureText) return box;
 
   // Matn `preferredMinFont` da sig'sa — shu bilan tugatiladi
@@ -284,25 +368,25 @@ function computeRenderBox(
     return box;
   }
 
-  // Sig'masa — bubble yo'nalishida binary search bilan kengaytirish
-  if (bubbleBbox.w <= bbox.w && bubbleBbox.h <= bbox.h) {
+  // Sig'masa — pufak yo'nalishida binary search bilan kengaytirish
+  if (workBubble.w <= bbox.w && workBubble.h <= bbox.h) {
     return box;
   }
   let lo = 0;
   let hi = 1;
   // hozirgi factor ni baholash
-  if (bubbleBbox.w > bbox.w) {
-    lo = Math.max(0, (box.w - bbox.w) / (bubbleBbox.w - bbox.w));
-  } else if (bubbleBbox.h > bbox.h) {
-    lo = Math.max(0, (box.h - bbox.h) / (bubbleBbox.h - bbox.h));
+  if (workBubble.w > bbox.w) {
+    lo = Math.max(0, (box.w - bbox.w) / (workBubble.w - bbox.w));
+  } else if (workBubble.h > bbox.h) {
+    lo = Math.max(0, (box.h - bbox.h) / (workBubble.h - bbox.h));
   }
-  let best = expandBoxWithinBubble(bbox, bubbleBbox, hi);
+  let best = expandBoxWithinBubble(bbox, workBubble, hi);
   if (!textFitsInBox(ctx, measureText, PREFERRED_MIN_FONT, fontFamily, fontWeight, fontStyle, best.w, best.h)) {
     return best;
   }
   for (let i = 0; i < 8; i++) {
     const mid = (lo + hi) / 2;
-    const candidate = expandBoxWithinBubble(bbox, bubbleBbox, mid);
+    const candidate = expandBoxWithinBubble(bbox, workBubble, mid);
     if (textFitsInBox(ctx, measureText, PREFERRED_MIN_FONT, fontFamily, fontWeight, fontStyle, candidate.w, candidate.h)) {
       best = candidate;
       hi = mid;
@@ -385,8 +469,109 @@ function fitFontSize(
   return best;
 }
 
+type LayoutBox = { x: number; y: number; w: number; h: number };
+
+/**
+ * QO'SHNI / BIRIKKAN bubble'lar matn-zonalari bir-biriga kirib ketgan bo'lsa,
+ * ularni o'zaro KESADI. Ikki bubble bir tomoni bilan tutashgan (yoki backend
+ * ularni biroz kengroq to'rtburchak bilan bergan) holatda matn-zonalar
+ * ustma-ust tushib, matn bir-birining ustiga chiqib ketardi. Bu funksiya har
+ * juft kesishuvchi box uchun kesishuv to'rtburchagini topib, KICHIKROQ
+ * o'qicha (gorizontal yoki vertikal) ikkala box chekkasini kesishuv o'rta
+ * chizig'igacha qisqartiradi — natijada box'lar tegib turadi, lekin ustma-ust
+ * tushmaydi.
+ *
+ * Faqat AVTO box'larga taʼsir qiladi; foydalanuvchi qo'lda qo'ygan box
+ * (`manualBox`) o'zgarmaydi (lekin qo'shnisini undan uzoqlashtirishi mumkin).
+ */
+function resolveBoxOverlaps(
+  laid: Array<{ box: LayoutBox; manualBox: boolean }>,
+): void {
+  const MIN_DIM = 12; // box bundan kichrayib ketmasin
+  for (let i = 0; i < laid.length; i++) {
+    for (let j = i + 1; j < laid.length; j++) {
+      const a = laid[i];
+      const b = laid[j];
+      const A = a.box;
+      const B = b.box;
+
+      const ix = Math.max(A.x, B.x);
+      const iy = Math.max(A.y, B.y);
+      const ir = Math.min(A.x + A.w, B.x + B.w);
+      const ib = Math.min(A.y + A.h, B.y + B.h);
+      const ow = ir - ix; // kesishuv kengligi
+      const oh = ib - iy; // kesishuv balandligi
+      if (ow <= 0 || oh <= 0) continue; // kesishmaydi
+
+      // Ikkala box ham qo'lda — tegmaymiz.
+      if (a.manualBox && b.manualBox) continue;
+
+      const aCx = A.x + A.w / 2;
+      const bCx = B.x + B.w / 2;
+      const aCy = A.y + A.h / 2;
+      const bCy = B.y + B.h / 2;
+
+      if (ow <= oh) {
+        // Gorizontal kesishuv kichikroq — chap/o'ng bo'yicha ajratamiz.
+        const mid = (Math.max(A.x, B.x) + Math.min(A.x + A.w, B.x + B.w)) / 2;
+        const [left, right] = aCx <= bCx ? [a, b] : [b, a];
+        trimRight(left.box, mid, left.manualBox, MIN_DIM);
+        trimLeft(right.box, mid, right.manualBox, MIN_DIM);
+      } else {
+        // Vertikal kesishuv kichikroq — yuqori/past bo'yicha ajratamiz.
+        const mid = (Math.max(A.y, B.y) + Math.min(A.y + A.h, B.y + B.h)) / 2;
+        const [top, bottom] = aCy <= bCy ? [a, b] : [b, a];
+        trimBottom(top.box, mid, top.manualBox, MIN_DIM);
+        trimTop(bottom.box, mid, bottom.manualBox, MIN_DIM);
+      }
+    }
+  }
+}
+
+function trimRight(box: LayoutBox, edge: number, manual: boolean, minDim: number): void {
+  if (manual) return;
+  const newRight = Math.min(box.x + box.w, edge);
+  const newW = Math.max(minDim, newRight - box.x);
+  box.w = newW;
+}
+function trimLeft(box: LayoutBox, edge: number, manual: boolean, minDim: number): void {
+  if (manual) return;
+  const right = box.x + box.w;
+  const newX = Math.max(box.x, edge);
+  box.x = Math.min(newX, right - minDim);
+  box.w = Math.max(minDim, right - box.x);
+}
+function trimBottom(box: LayoutBox, edge: number, manual: boolean, minDim: number): void {
+  if (manual) return;
+  const newBottom = Math.min(box.y + box.h, edge);
+  box.h = Math.max(minDim, newBottom - box.y);
+}
+function trimTop(box: LayoutBox, edge: number, manual: boolean, minDim: number): void {
+  if (manual) return;
+  const bottom = box.y + box.h;
+  const newY = Math.max(box.y, edge);
+  box.y = Math.min(newY, bottom - minDim);
+  box.h = Math.max(minDim, bottom - box.y);
+}
+
 export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Region[]) {
   ctx.textBaseline = "top";
+
+  const imageSize = { w: ctx.canvas.width, h: ctx.canvas.height };
+
+  // ── 1-bosqich: har bir region uchun layout box'ni hisoblash ────────────
+  // Avval barcha box'lar hisoblanadi, so'ng QO'SHNI (birikkan/yondosh)
+  // bubble'lar box'lari bir-biriga kirib ketgan bo'lsa, ular o'zaro
+  // KESILADI (resolveBoxOverlaps). Shunda bir tomoni birikkan ikki bubble'da
+  // matn ustma-ust tushmaydi.
+  type LaidRegion = {
+    r: Region;
+    text: string;
+    box: { x: number; y: number; w: number; h: number };
+    manualBox: boolean;
+  };
+
+  const laid: LaidRegion[] = [];
 
   regions.forEach((r) => {
     if (!r.uz_text) return;
@@ -396,7 +581,6 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
     const fontWeight = r.font_weight || "bold";
     const fontStyle = r.font_style || "normal";
     const fontFamily = r.font_family || "Anime Ace";
-    const align = resolveAlign(r);
 
     // Layout box'ni tanlash:
     //  - Foydalanuvchi box'ni QO'LDA resize qilgan bo'lsa (`bbox_manual`) —
@@ -417,8 +601,24 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
     } else if (hasRealBubble) {
       box = bubbleTextZone(r.bubble_bbox!, r.bbox);
     } else {
-      box = computeRenderBox(ctx, r.bbox, r.bubble_bbox, text, fontFamily, fontWeight, fontStyle);
+      // Pufak yo'q yoki OCR'ga teng (Apple Vision) — sintetik pufak bilan
+      // matnga moslab kengaytiriladi (tor OCR box'da matn kichrayib qolmaydi).
+      box = computeRenderBox(ctx, r.bbox, r.bubble_bbox, text, fontFamily, fontWeight, fontStyle, imageSize);
     }
+
+    laid.push({ r, text, box, manualBox: !!r.bbox_manual });
+  });
+
+  // QO'SHNI bubble'lar box'larini o'zaro kesish (faqat avto box'lar uchun;
+  // foydalanuvchi qo'lda qo'ygan box'larga tegmaymiz).
+  resolveBoxOverlaps(laid);
+
+  // ── 2-bosqich: har bir region matnini chizish ──────────────────────────
+  laid.forEach(({ r, text, box }) => {
+    const fontWeight = r.font_weight || "bold";
+    const fontStyle = r.font_style || "normal";
+    const fontFamily = r.font_family || "Anime Ace";
+    const align = resolveAlign(r);
 
     const padding = 4;
     const boxWidth = Math.max(10, box.w);
@@ -448,7 +648,7 @@ export function drawTranslatedTexts(ctx: CanvasRenderingContext2D, regions: Regi
         fontWeight,
         fontStyle,
         AUTO_MIN_FONT,
-        AUTO_MAX_FONT,
+        maxFontForBox(boxWidth, boxHeight),
       );
     }
     ctx.font = buildFontString(fontStyle, fontWeight, fontSize, fontFamily);
